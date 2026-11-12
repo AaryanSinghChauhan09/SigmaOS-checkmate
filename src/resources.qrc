@@ -1,0 +1,5 @@
+<RCC><qresource prefix="/">
+  <file>Main.qml</file><file>BoardView.qml</file><file>ChessPiece.qml</file>
+  <file alias="checkmate.svg">../share/checkmate.svg</file>
+  <file>i18n/en.json</file>
+</qresource></RCC>

@@ -1,0 +1,40 @@
+# Checkmate
+
+A native 3D chess game for Omarchy, built with C++ and Qt Quick 3D. Play against a friend on the same device or against the built-in computer, with four original sculptural piece sets: Orbital Orders, Midnight Atelier, Moss & Myth, and Candy Kingdom.
+
+Pieces glide into place, knights hop, captures shrink away, and check gets a brief pulse. Reduced motion is available in Settings. The interface follows Omarchy's theme and language; the board's materials follow the selected set.
+
+## Play
+
+Click a piece, then a highlighted square. Right-drag to orbit the board and scroll to zoom. Choose New game for local two-player play, a computer opponent, your color, and three difficulty levels. Games have no clock and save after each move. Undo takes back both sides' moves against the computer.
+
+The rules include castling, en passant, all four promotion choices, checkmate, stalemate, and insufficient material. Threefold repetition and the fifty-move rule end a game automatically. Computer difficulty names describe search effort, not an Elo rating.
+
+| Key | Action |
+| --- | --- |
+| Arrow keys | Navigate squares |
+| Space / Enter | Select or move |
+| Escape | Cancel selection |
+| Ctrl+Z | Undo |
+| N | New game |
+| F | Flip board |
+| R | Reset camera |
+| ? | Show shortcuts |
+| Q | Quit |
+
+## Build
+
+Dependencies: CMake, a C++17 compiler, Qt 6 base, declarative, Quick 3D, SVG, and Wayland. On Arch, install `base-devel cmake qt6-base qt6-declarative qt6-quick3d qt6-svg qt6-wayland`.
+
+```bash
+bin/build
+bin/test
+build/checkmate open
+cmake --install build --prefix ~/.local
+```
+
+The package recipe belongs in omarchy-pkgs. CI reads dependencies from that recipe once it lands; until then `bin/test` is the local check. Tests exercise the real QML window, theme and language watchers, chess move trees, special moves, draw detection, undo, save/restore, and computer cancellation.
+
+All 3D pieces are generated from original geometry in the binary. No downloaded models, franchise characters, network connection, or separate chess engine is needed. The game is saved atomically in the standard application data directory as `checkmate/game.json`.
+
+MIT license. Shared theme, translation, and build infrastructure follows the Omarchy app templates by David Heinemeier Hansson.

@@ -1,0 +1,176 @@
+#include "backend.h"
+
+#include <QtConcurrent>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QTimer>
+#include <algorithm>
+
+Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_savePath(savePath) {
+  if (m_savePath.isEmpty()) m_savePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/game.json";
+  restore();
+  refresh();
+  QTimer::singleShot(0, this, &Backend::scheduleComputer);
+}
+Backend::~Backend() { cancelComputer(); }
+QVariantList Backend::targets() const {
+  QVariantList result;
+  for (auto move : m_legal) if (move.from == m_selected && !result.contains(move.to)) result.append(move.to);
+  return result;
+}
+void Backend::refresh() {
+  m_legal = position().legal();
+  m_outcome.clear();
+  if (m_legal.empty()) m_outcome = checked() ? (whiteTurn() ? "black-wins" : "white-wins") : "stalemate";
+  else if (position().insufficient()) m_outcome = "material";
+  else if (position().halfmove >= 100) m_outcome = "fifty-moves";
+  else {
+    int repetitions = 0;
+    auto key = position().key();
+    for (const auto &p : m_positions) repetitions += p.key() == key;
+    if (repetitions >= 3) m_outcome = "repetition";
+  }
+  if (m_pieces.isEmpty()) {
+    for (int id = 0; id < 32; ++id) m_pieces.append(QVariantMap{{"id",id},{"kind",1},{"white",true},{"square",0},{"alive",false}});
+  }
+  for (int id = 0; id < 32; ++id) {
+    auto record = m_pieces[id].toMap(); record["alive"] = false; m_pieces[id] = record;
+  }
+  for (int s = 0; s < 64; ++s) {
+    const auto p = position().board[s];
+    if (p.kind) m_pieces[p.id] = QVariantMap{{"id",p.id},{"kind",p.kind},{"white",p.white},{"square",s},{"alive",true}};
+  }
+  emit changed();
+}
+void Backend::selectSquare(int square) {
+  if (square < 0 || square >= 64 || finished() || m_thinking || promotionPending() || (m_computer && whiteTurn() != m_humanWhite)) return;
+  if (m_selected >= 0 && square != m_selected && move(m_selected,square)) return;
+  const auto p = position().board[square];
+  m_selected = square == m_selected || !p.kind || p.white != whiteTurn() ? -1 : square;
+  emit changed();
+}
+bool Backend::move(int from, int to, int promotion) {
+  if (finished() || m_thinking || (m_computer && whiteTurn() != m_humanWhite)) return false;
+  for (auto candidate : m_legal) if (candidate.from == from && candidate.to == to) {
+    if (candidate.promotion && !promotion) {
+      m_pending = candidate; emit changed(); return true;
+    }
+    if (candidate.promotion == promotion) { m_pending = {}; apply(candidate); return true; }
+  }
+  return false;
+}
+void Backend::promote(int kind) {
+  if (!promotionPending()) return;
+  move(m_pending.from,m_pending.to,kind);
+}
+void Backend::cancelSelection() { m_pending = {}; m_selected = -1; emit changed(); }
+void Backend::apply(Chess::Move move) {
+  const auto piece = position().board[move.from];
+  const bool capture = position().board[move.to].kind || (piece.kind == Chess::Pawn && move.to == position().ep);
+  m_notation.append(QString::fromStdString(position().san(move)));
+  m_positions.push_back(position().after(move));
+  m_moves.push_back(move);
+  m_selected = -1;
+  refresh();
+  emit moved(piece.id,piece.kind == Chess::Knight,capture);
+  save();
+  QTimer::singleShot(m_reducedMotion ? 0 : 420,this,&Backend::scheduleComputer);
+}
+void Backend::cancelComputer() {
+  ++m_generation;
+  if (m_cancel) m_cancel->store(true);
+  m_thinking = false;
+}
+void Backend::scheduleComputer() {
+  if (!m_computer || whiteTurn() == m_humanWhite || finished() || m_thinking) return;
+  m_thinking = true;
+  auto cancel = m_cancel = std::make_shared<std::atomic_bool>(false);
+  const auto generation = m_generation;
+  const auto p = position();
+  const int difficulty = m_difficulty;
+  std::vector<std::string> history;
+  for (const auto &past : m_positions) history.push_back(past.key());
+  auto watcher = new QFutureWatcher<Chess::Move>(this);
+  connect(watcher,&QFutureWatcher<Chess::Move>::finished,this,[this,watcher,generation,cancel] {
+    auto result = watcher->result();
+    watcher->deleteLater();
+    if (cancel->load() || generation != m_generation) return;
+    m_thinking = false;
+    if (std::find(m_legal.begin(),m_legal.end(),result) != m_legal.end()) apply(result);
+    else { m_error = tr("The computer could not choose a legal move. Undo or start a new game."); emit changed(); }
+  });
+  watcher->setFuture(QtConcurrent::run([p,difficulty,cancel,history] { return Chess::bestMove(p,difficulty,cancel,history); }));
+  emit changed();
+}
+void Backend::newGame(bool computer, int difficulty, bool humanWhite) {
+  cancelComputer();
+  m_computer = computer; m_difficulty = std::clamp(difficulty,0,2); m_humanWhite = humanWhite;
+  m_positions = {Chess::Position::initial()}; m_moves.clear(); m_notation.clear(); m_pending = {}; m_selected = -1;
+  refresh(); save(); scheduleComputer();
+}
+void Backend::undo() {
+  if (m_moves.empty()) return;
+  cancelComputer();
+  do {
+    m_positions.pop_back(); m_moves.pop_back(); m_notation.removeLast();
+  } while (m_computer && !m_moves.empty() && whiteTurn() != m_humanWhite);
+  m_selected = -1; m_pending = {};
+  refresh(); save(); scheduleComputer();
+}
+void Backend::dismissError() { m_error.clear(); emit changed(); }
+void Backend::setPieceSet(int value) {
+  if (value < 0 || value > 3 || value == m_pieceSet) return;
+  m_pieceSet = value; emit preferencesChanged(); save();
+}
+void Backend::setReducedMotion(bool value) {
+  if (value == m_reducedMotion) return;
+  m_reducedMotion = value; emit preferencesChanged(); save();
+}
+void Backend::setAutoRotate(bool value) {
+  if (value == m_autoRotate) return;
+  m_autoRotate = value; emit preferencesChanged(); save();
+}
+void Backend::save() {
+  if (m_savePath == ":memory:") return;
+  QJsonArray moves;
+  for (auto m : m_moves) moves.append(QJsonArray{m.from,m.to,m.promotion});
+  QJsonObject data{{"version",1},{"moves",moves},{"computer",m_computer},{"humanWhite",m_humanWhite},
+                   {"difficulty",m_difficulty},{"pieceSet",m_pieceSet},{"reducedMotion",m_reducedMotion},{"autoRotate",m_autoRotate}};
+  QDir().mkpath(QFileInfo(m_savePath).absolutePath());
+  QSaveFile file(m_savePath);
+  file.setDirectWriteFallback(false);
+  const auto bytes = QJsonDocument(data).toJson();
+  if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+    m_error = tr("Could not save your game: %1").arg(file.errorString()); emit changed();
+  }
+}
+void Backend::restore() {
+  if (m_savePath == ":memory:" || !QFile::exists(m_savePath)) return;
+  QFile file(m_savePath);
+  if (!file.open(QIODevice::ReadOnly)) { m_error = tr("Could not open your saved game: %1").arg(file.errorString()); return; }
+  QJsonParseError error;
+  auto data = QJsonDocument::fromJson(file.readAll(),&error).object();
+  auto invalid = [&] {
+    m_positions = {Chess::Position::initial()}; m_moves.clear(); m_notation.clear();
+    // Keep the damaged save intact until the player explicitly starts again.
+    m_error = tr("The saved game is damaged. Start a new game to replace it.");
+  };
+  if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 5000) { invalid(); return; }
+  for (auto value : data["moves"].toArray()) {
+    auto entry = value.toArray();
+    if (entry.size() != 3) { invalid(); return; }
+    Chess::Move move{entry[0].toInt(-1),entry[1].toInt(-1),entry[2].toInt(-1)};
+    const auto legal = position().legal();
+    if (std::find(legal.begin(),legal.end(),move) == legal.end()) { invalid(); return; }
+    m_notation.append(QString::fromStdString(position().san(move)));
+    m_positions.push_back(position().after(move)); m_moves.push_back(move);
+  }
+  m_computer = data["computer"].toBool(true); m_humanWhite = data["humanWhite"].toBool(true);
+  m_difficulty = std::clamp(data["difficulty"].toInt(1),0,2); m_pieceSet = std::clamp(data["pieceSet"].toInt(),0,3);
+  m_reducedMotion = data["reducedMotion"].toBool(); m_autoRotate = data["autoRotate"].toBool();
+}

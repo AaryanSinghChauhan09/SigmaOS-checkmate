@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Checkmate
+Comment=Beautiful 3D chess for one or two players
+Comment[da]=Smuk 3D-skak for en eller to spillere
+Exec=checkmate open
+Icon=checkmate
+Terminal=false
+Categories=Game;BoardGame;
+StartupWMClass=checkmate
