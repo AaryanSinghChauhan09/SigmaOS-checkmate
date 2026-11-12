@@ -1,5 +1,7 @@
 # Checkmate
 
+![Checkmate in play](https://github.com/user-attachments/assets/1365662d-e557-41eb-bdce-0f9ceb53dd3d)
+
 A native 3D chess game for Omarchy, built with C++ and Qt Quick 3D. Play against a friend on the same device or against the built-in computer, with four original sculptural piece sets: Orbital Orders, Midnight Atelier, Moss & Myth, and Candy Kingdom.
 
 Pieces glide into place, knights hop, captures shrink away, and check gets a brief pulse. Reduced motion is available in Settings. The interface follows Omarchy's theme and language; the board's materials follow the selected set.
