@@ -1,13 +1,15 @@
 import QtQuick
 import QtQuick3D
+import Checkmate 1.0
 
 Item {
   id: board
   property int design: backend.pieceSet
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
-  property real azimuth: backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)
-  property real elevation: -49
-  property real distance: 13.8
+  property real manualAzimuth: 0
+  property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
+  property real elevation: -44
+  property real distance: 13.2
   property int cursorSquare: 12
   property bool keyboardMode: false
   property real checkGlow: .22
@@ -15,25 +17,38 @@ Item {
   property var darkSquares: ["#394652", "#654333", "#65775d", "#a78eb3"]
   property var frames: ["#28343f", "#432b22", "#5b4934", "#e8c6be"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
+  property bool sceneReady: false
+  Component.onCompleted: Qt.callLater(function() { sceneReady = true })
+  clip: true
   focus: true
   function resetCamera() {
-    azimuth = backend.computer ? (backend.humanWhite ? 0 : 180) : 0
-    elevation = -49
-    distance = 13.8
+    manualAzimuth = 0
+    elevation = -44
+    distance = 13.2
   }
   function keyboardSelect() { keyboardMode = true; backend.selectSquare(cursorSquare) }
   function navigate(dx, dy) {
     keyboardMode = true
-    let x = Math.max(0, Math.min(7, cursorSquare % 8 + dx))
-    let y = Math.max(0, Math.min(7, Math.floor(cursorSquare / 8) + dy))
+    let angle = Math.round(azimuth / 90) * Math.PI / 2
+    let fileStep = Math.round(dx * Math.cos(angle) - dy * Math.sin(angle))
+    let rankStep = Math.round(dx * Math.sin(angle) + dy * Math.cos(angle))
+    let x = Math.max(0, Math.min(7, cursorSquare % 8 + fileStep))
+    let y = Math.max(0, Math.min(7, Math.floor(cursorSquare / 8) + rankStep))
     cursorSquare = y * 8 + x
   }
-  Behavior on azimuth { enabled: board.motion && !orbit.dragging; NumberAnimation { duration: 650; easing.type: Easing.InOutCubic } }
+  Behavior on azimuth { id: rotationBehavior; enabled: board.motion && !orbit.dragging; NumberAnimation { id: cameraTurn; duration: 650; easing.type: Easing.InOutCubic } }
+  onMotionChanged: {
+    if (!motion) {
+      rotationBehavior.enabled = false
+      checkPulse.stop(); checkGlow = .22
+      azimuth = Qt.binding(function() {
+        return (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + board.manualAzimuth
+      })
+      rotationBehavior.enabled = Qt.binding(function() { return board.motion && !orbit.dragging })
+    }
+  }
   Connections {
     target: backend
-    function onChanged() {
-      if (backend.autoRotate && !backend.computer) board.azimuth = backend.whiteTurn ? 0 : 180
-    }
     function onMoved() { if (backend.checked && board.motion) checkPulse.restart() }
   }
   SequentialAnimation {
@@ -44,15 +59,25 @@ Item {
   Rectangle {
     anchors.fill: parent
     gradient: Gradient {
-      GradientStop { position: 0; color: theme.light ? Qt.lighter(theme.background,1.04) : "#1e2934" }
-      GradientStop { position: 1; color: theme.background }
+      GradientStop { position: 0; color: ["#0b1726","#49392e","#353b27","#e8c8c5"][board.design] }
+      GradientStop { position: 1; color: ["#080e19","#1c1716","#1f261a","#ad8b9e"][board.design] }
     }
+  }
+  Image {
+    anchors.fill: parent
+    source: board.design === 0 ? "qrc:/scenes/orbital.png" : board.design === 2 ? "qrc:/scenes/woodland.png" : ""
+    fillMode: Image.PreserveAspectCrop
+    opacity: board.design === 0 ? .85 : .7
+    visible: source.toString().length > 0
   }
   View3D {
     id: scene
+    objectName: "scene"
     anchors.fill: parent
     environment: SceneEnvironment {
       backgroundMode: SceneEnvironment.Transparent
+      lightProbe: Texture { textureData: SurfaceTexture { style: 4 } }
+      probeExposure: .65
       antialiasingMode: SceneEnvironment.MSAA
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
@@ -61,6 +86,7 @@ Item {
       aoDistance: .8
       aoSoftness: 50
     }
+    Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
     Node {
       eulerRotation: Qt.vector3d(board.elevation,board.azimuth,0)
       PerspectiveCamera { id: camera; z: board.distance; clipNear: .1; clipFar: 150; fieldOfView: 43 }
@@ -82,7 +108,7 @@ Item {
       source: "#Cube"
       y: -.27
       scale: Qt.vector3d(.091,.005,.091)
-      materials: PrincipledMaterial { baseColor: board.frames[board.design]; roughness: .38; metalness: board.design === 0 ? .4 : .05 }
+      materials: PrincipledMaterial { baseColor: board.frames[board.design]; baseColorMap: surfaceMap; roughness: .38; metalness: board.design === 0 ? .4 : .05 }
     }
     Model {
       source: "#Cube"
@@ -94,11 +120,12 @@ Item {
       source: "#Cube"
       y: .001
       scale: Qt.vector3d(.084,.0005,.084)
-      materials: PrincipledMaterial { baseColor: board.frames[board.design]; roughness: .4 }
+      materials: PrincipledMaterial { baseColor: board.frames[board.design]; baseColorMap: surfaceMap; roughness: .4 }
     }
     Repeater3D {
       model: 64
       Model {
+        id: tile
         required property int index
         property int boardSquare: index
         property bool target: backend.targets.indexOf(index) !== -1
@@ -111,7 +138,8 @@ Item {
         y: .04
         scale: Qt.vector3d(.00996,.001,.00996)
         materials: PrincipledMaterial {
-          baseColor: parent.marked ? board.accents[board.design] : (Math.floor(index / 8) + index % 8) % 2 === 1 ? board.lightSquares[board.design] : board.darkSquares[board.design]
+          baseColorMap: surfaceMap
+          baseColor: tile.marked ? board.accents[board.design] : (Math.floor(index / 8) + index % 8) % 2 === 1 ? board.lightSquares[board.design] : board.darkSquares[board.design]
           roughness: board.design === 3 ? .3 : .55
           metalness: board.design === 0 ? .15 : 0
         }
@@ -163,6 +191,24 @@ Item {
       }
     }
   }
+  Repeater {
+    model: 16
+    Text {
+      required property int index
+      property vector3d projected: {
+        board.azimuth; board.elevation; board.distance; board.width; board.height
+        if (!board.sceneReady) return Qt.vector3d(-100,-100,0)
+        return scene.mapFrom3DScene(index < 8 ? Qt.vector3d(index - 3.5,.14,4.25) : Qt.vector3d(-4.25,.14,3.5 - (index - 8)))
+      }
+      x: projected.x - width / 2
+      y: projected.y - height / 2
+      text: index < 8 ? "abcdefgh"[index] : index - 7
+      color: board.design === 3 ? "#5d3c58" : "#f2e6c8"
+      font.pixelSize: 11
+      font.bold: true
+      opacity: .8
+    }
+  }
   MouseArea {
     id: orbit
     anchors.fill: parent
@@ -177,7 +223,7 @@ Item {
     }
     onPositionChanged: mouse => {
       if (dragging) {
-        board.azimuth -= (mouse.x - previousX) * .4
+        board.manualAzimuth -= (mouse.x - previousX) * .4
         board.elevation = Math.max(-80, Math.min(-25, board.elevation - (mouse.y - previousY) * .25))
         previousX = mouse.x; previousY = mouse.y
       }
@@ -196,8 +242,8 @@ Item {
   Row {
     anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 20 }
     spacing: 24
-    Text { text: qsTr("Right-drag to orbit"); color: theme.foreground; opacity: .5; font.pixelSize: 11 }
-    Text { text: qsTr("Scroll to zoom"); color: theme.foreground; opacity: .5; font.pixelSize: 11 }
-    Text { text: qsTr("F · Flip board"); color: theme.foreground; opacity: .5; font.pixelSize: 11 }
+    Text { text: qsTr("Right-drag to orbit"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
+    Text { text: qsTr("Scroll to zoom"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
+    Text { text: qsTr("F · Flip board"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
   }
 }

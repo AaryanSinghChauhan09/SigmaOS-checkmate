@@ -8,21 +8,23 @@
 
 namespace {
 constexpr float pi = 3.14159265358979323846f;
-struct Vertex { QVector3D position, normal; };
+struct Vertex { QVector3D position, normal; QVector2D uv; };
 struct Mesh {
   std::vector<Vertex> vertices;
   void triangle(QVector3D a, QVector3D b, QVector3D c, QVector3D na, QVector3D nb, QVector3D nc) {
-    vertices.push_back({a,na}); vertices.push_back({b,nb}); vertices.push_back({c,nc});
+    auto uv = [](QVector3D p) { return QVector2D(std::atan2(p.z(),p.x())/(2*pi)+.5f,p.y()); };
+    vertices.push_back({a,na,uv(a)}); vertices.push_back({b,nb,uv(b)}); vertices.push_back({c,nc,uv(c)});
   }
   void lathe(const std::vector<QVector2D> &profile, const QMatrix4x4 &transform = {}) {
     const int sides = 48;
+    const QMatrix4x4 normals = transform.inverted().transposed();
     auto point = [&](QVector2D p, float a) { return transform.map(QVector3D(p.x()*std::cos(a),p.y(),p.x()*std::sin(a))); };
     for (size_t j = 0; j + 1 < profile.size(); ++j) {
       auto a = profile[j], b = profile[j+1];
       float dr = b.x()-a.x(), dy = b.y()-a.y();
       for (int i = 0; i < sides; ++i) {
         float t = 2*pi*i/sides, u = 2*pi*(i+1)/sides;
-        auto normal = [&](float angle) { return transform.mapVector(QVector3D(dy*std::cos(angle),-dr,dy*std::sin(angle))).normalized(); };
+        auto normal = [&](float angle) { return normals.mapVector(QVector3D(dy*std::cos(angle),-dr,dy*std::sin(angle))).normalized(); };
         auto n = normal(t), m = normal(u);
         triangle(point(a,t),point(b,t),point(b,u),n,n,m);
         triangle(point(a,t),point(b,u),point(a,u),n,m,m);
@@ -165,6 +167,7 @@ void SculptGeometry::rebuild() {
   setPrimitiveType(QQuick3DGeometry::PrimitiveType::Triangles);
   addAttribute(QQuick3DGeometry::Attribute::PositionSemantic,0,QQuick3DGeometry::Attribute::F32Type);
   addAttribute(QQuick3DGeometry::Attribute::NormalSemantic,sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
+  addAttribute(QQuick3DGeometry::Attribute::TexCoord0Semantic,2*sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
   setBounds({-.5f,0,-.5f},{.5f,1.8f,.5f});
   update();
 }

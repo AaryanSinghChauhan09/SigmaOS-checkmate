@@ -4,6 +4,7 @@ import Checkmate 1.0
 
 Node {
   id: piece
+  objectName: "figure-" + pieceId
   required property int pieceId
   required property var record
   required property int design
@@ -22,11 +23,27 @@ Node {
   z: 3.5 - Math.floor(record.square / 8)
   y: .12 + lift + (selected ? .1 : 0)
   scale: Qt.vector3d(presence, presence, presence)
-  eulerRotation.y: record.white ? 0 : 180
-  Behavior on x { enabled: piece.ready && piece.motion; NumberAnimation { duration: 360; easing.type: Easing.InOutCubic } }
-  Behavior on z { enabled: piece.ready && piece.motion; NumberAnimation { duration: 360; easing.type: Easing.InOutCubic } }
-  Behavior on y { enabled: piece.ready && piece.motion && !hop.running; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-  Behavior on presence { enabled: piece.ready && piece.motion; NumberAnimation { duration: 220; easing.type: Easing.InCubic } }
+  eulerRotation.y: record.kind === 2 ? (record.white ? 90 : -90) : (record.white ? 180 : 0)
+  Behavior on x { id: xBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideX; duration: 360; easing.type: Easing.InOutCubic } }
+  Behavior on z { id: zBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideZ; duration: 360; easing.type: Easing.InOutCubic } }
+  Behavior on y { id: yBehavior; enabled: piece.ready && piece.motion && !hop.running; NumberAnimation { id: selectionLift; duration: 180; easing.type: Easing.OutCubic } }
+  Behavior on presence { id: presenceBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: captureShrink; duration: 220; easing.type: Easing.InCubic } }
+  onMotionChanged: {
+    if (!motion) {
+      xBehavior.enabled = false; zBehavior.enabled = false
+      yBehavior.enabled = false; presenceBehavior.enabled = false
+      hop.stop(); lift = 0
+      // Resolve moves queued before the first animation frame as well.
+      x = Qt.binding(function() { return piece.record.square % 8 - 3.5 })
+      z = Qt.binding(function() { return 3.5 - Math.floor(piece.record.square / 8) })
+      y = Qt.binding(function() { return .12 + piece.lift + (piece.selected ? .1 : 0) })
+      presence = Qt.binding(function() { return piece.record.alive ? 1 : 0 })
+      xBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
+      zBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
+      yBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion && !hop.running })
+      presenceBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
+    }
+  }
   Component.onCompleted: ready = true
   Connections {
     target: backend
@@ -39,6 +56,7 @@ Node {
   }
   SequentialAnimation {
     id: hop
+    objectName: "moveHop"
     property real height: .15
     NumberAnimation { target: piece; property: "lift"; to: hop.height; duration: 150; easing.type: Easing.OutQuad }
     NumberAnimation { target: piece; property: "lift"; to: 0; duration: 210; easing.type: Easing.InOutQuad }
@@ -49,6 +67,7 @@ Node {
     pickable: piece.record.alive
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 0 }
     materials: PrincipledMaterial {
+      baseColorMap: Texture { textureData: SurfaceTexture { style: piece.design } tilingModeVertical: Texture.Repeat }
       baseColor: piece.bodyColor
       metalness: piece.design === 0 ? .32 : 0
       roughness: piece.design === 3 ? .22 : piece.design === 1 ? .36 : .48

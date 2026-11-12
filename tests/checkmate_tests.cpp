@@ -15,7 +15,13 @@
 
 #include "backend.h"
 #include "sculptgeometry.h"
+#include "surfacetexture.h"
+#include <QQuick3D>
 #include <algorithm>
+#include <functional>
+#include <limits>
+#include <QJsonArray>
+#include <QVector3D>
 #include "theme.h"
 #include "translator.h"
 
@@ -156,7 +162,9 @@ class CheckmateTests : public QObject {
     Q_OBJECT
 
 private slots:
-    void initTestCase() { QQuickStyle::setStyle("Material"); qmlRegisterType<SculptGeometry>("Checkmate",1,0,"SculptGeometry"); }
+    void init() { QTest::failOnWarning(); }
+
+    void initTestCase() { QSurfaceFormat::setDefaultFormat(QQuick3D::idealSurfaceFormat()); QQuickStyle::setStyle("Material"); qmlRegisterType<SculptGeometry>("Checkmate",1,0,"SculptGeometry"); qmlRegisterType<SurfaceTexture>("Checkmate",1,0,"SurfaceTexture"); }
 
     void themeFallsBack() {
         QTemporaryDir dir;
@@ -353,6 +361,15 @@ private slots:
         QCOMPARE(Chess::perft(p,4), uint64_t(197281));
     }
 
+    void fenCountersCannotOverflow() {
+        auto p=Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 b - - 2147483647 2147483647");
+        auto legal=p.legal();
+        QVERIFY(!legal.empty());
+        auto next=p.after(legal.front());
+        QCOMPARE(next.halfmove,std::numeric_limits<int>::max());
+        QCOMPARE(next.fullmove,std::numeric_limits<int>::max());
+    }
+
     void specialMoveTrees() {
         const auto castle = Chess::Position::fromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
         QCOMPARE(Chess::perft(castle,1), uint64_t(48));
@@ -436,6 +453,127 @@ private slots:
         QCOMPARE(restored.moves().size(),1);
     }
 
+    void saveHasOneOwner() {
+        QTemporaryDir dir;
+        const QString path=dir.filePath("game.json");
+        Backend owner(path);
+        owner.newGame(false,0);
+        QVERIFY(owner.move(12,28));
+        QFile original(path); QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes=original.readAll(); original.close();
+        Backend other(path);
+        QVERIFY(!other.ownsSave());
+        QVERIFY(!other.error().isEmpty());
+        other.newGame(false,1); other.setPieceSet(3);
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(),bytes);
+    }
+
+    void damagedSaveSurvivesPreferences() {
+        QTemporaryDir dir;
+        const QString path=dir.filePath("game.json");
+        QVERIFY(write(path,"{broken"));
+        Backend game(path);
+        QVERIFY(!game.error().isEmpty());
+        game.setPieceSet(2);
+        game.setReducedMotion(true);
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(),QByteArray("{broken")); file.close();
+        game.newGame(false,0);
+        QVERIFY(game.error().isEmpty());
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(QJsonDocument::fromJson(file.readAll()).isObject());
+    }
+
+    void failedSavePreservesPreviousGame() {
+        QTemporaryDir dir;
+        const QString path=dir.filePath("game.json");
+        Backend game(path); game.newGame(false,0);
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto bytes=file.readAll(); file.close();
+        QVERIFY(QFile::setPermissions(dir.path(),QFile::ReadOwner|QFile::ExeOwner));
+        const bool moved=game.move(12,28);
+        QVERIFY(QFile::setPermissions(dir.path(),QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
+        QVERIFY(moved); QVERIFY(!game.saveHealthy());
+        QVERIFY(!game.error().isEmpty());
+        game.dismissError(); QVERIFY(!game.saveHealthy());
+        QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.readAll(),bytes); file.close();
+        QVERIFY(game.move(52,36)); QVERIFY(game.saveHealthy());
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(file.readAll()).object()["moves"].toArray().size(),2);
+    }
+
+    void restoreRejectsMovesAfterDraw() {
+        QTemporaryDir dir;
+        QJsonArray moves;
+        for (int i=0;i<2;++i) {
+            moves.append(QJsonArray{6,21,0}); moves.append(QJsonArray{62,45,0});
+            moves.append(QJsonArray{21,6,0}); moves.append(QJsonArray{45,62,0});
+        }
+        moves.append(QJsonArray{12,28,0});
+        QJsonDocument data(QJsonObject{{"version",1},{"moves",moves}});
+        QVERIFY(write(dir.filePath("game.json"),data.toJson()));
+        Backend game(dir.filePath("game.json"));
+        QVERIFY(!game.error().isEmpty());
+        QVERIFY(game.moves().isEmpty());
+    }
+
+    void repetitionKeysIncludeOnlyLegalEnPassant() {
+        auto p=Chess::Position::fromFen("4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+        auto noEp=p; noEp.ep=-1;
+        QCOMPARE(p.key(),noEp.key());
+        p=Chess::Position::fromFen("6k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+        noEp=p; noEp.ep=-1;
+        QVERIFY(p.key()!=noEp.key());
+        auto rights=Chess::Position::initial();
+        auto lost=rights; lost.castle=0;
+        QVERIFY(rights.key()!=lost.key());
+    }
+
+    void secondLaunchWaitsForStartingOwner() {
+        QTemporaryDir dir;
+        Backend owner(dir.filePath("checkmate/game.json"));
+        owner.newGame(false,0);
+        QProcessEnvironment environment=QProcessEnvironment::systemEnvironment();
+        environment.insert("XDG_DATA_HOME",dir.path());
+        environment.insert("XDG_RUNTIME_DIR",dir.path());
+        QLocalServer server;
+        QTimer::singleShot(600,&server,[&] { server.listen(dir.filePath("checkmate.sock")); });
+        QProcess second;
+        second.setProcessEnvironment(environment);
+        second.start(QCoreApplication::applicationDirPath()+"/checkmate",{"open"});
+        QTRY_COMPARE_WITH_TIMEOUT(second.state(),QProcess::NotRunning,4000);
+        QCOMPARE(second.exitCode(),0);
+        QVERIFY(server.hasPendingConnections());
+    }
+
+    void headlessCommandsReadSavedGames() {
+        QTemporaryDir dir;
+        Backend game(dir.filePath("checkmate/game.json"));
+        game.newGame(false,0);
+        QVERIFY(game.move(12,28)); QVERIFY(game.move(52,36));
+        QProcessEnvironment environment=QProcessEnvironment::systemEnvironment();
+        environment.remove("DISPLAY"); environment.remove("WAYLAND_DISPLAY");
+        environment.insert("XDG_DATA_HOME",dir.path());
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        const QString binary=QCoreApplication::applicationDirPath()+"/checkmate";
+        process.start(binary,{"inspect","--json"});
+        QVERIFY(process.waitForFinished()); QCOMPARE(process.exitCode(),0);
+        auto inspected=QJsonDocument::fromJson(process.readAllStandardOutput()).object();
+        QCOMPARE(inspected["fen"].toString(),game.fen());
+        QCOMPARE(inspected["moves"].toArray().size(),2);
+        process.start(binary,{"export","--json"});
+        QVERIFY(process.waitForFinished()); QCOMPARE(process.exitCode(),0);
+        QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).object()["pgn"].toString().contains("1. e4 e5 *"));
+        process.start(binary,{"legal","--json"});
+        QVERIFY(process.waitForFinished()); QCOMPARE(process.exitCode(),0);
+        QCOMPARE(QJsonDocument::fromJson(process.readAllStandardOutput()).object()["moves"].toArray().size(),20);
+        process.start(binary,{"legal","invalid","--json"});
+        QVERIFY(process.waitForFinished()); QCOMPARE(process.exitCode(),1);
+        QVERIFY(!process.readAllStandardError().isEmpty());
+    }
+
     void computerMovesAndCancels() {
         Backend game(":memory:");
         game.newGame(true,0);
@@ -502,6 +640,83 @@ private slots:
         QTRY_VERIFY(dialog->property("opened").toBool());
         QTest::keyClick(window,Qt::Key_Escape);
         QTRY_VERIFY(!dialog->property("visible").toBool());
+        auto *board=window->findChild<QQuickItem *>("board");
+        QVERIFY(board);
+        board->setProperty("cursorSquare",28);
+        QTest::keyClick(window,Qt::Key_F);
+        QTest::keyClick(window,Qt::Key_Right);
+        QCOMPARE(board->property("cursorSquare").toInt(),27);
+        QTest::keyClick(window,Qt::Key_R);
+
+        backend.setAutoRotate(true);
+        QVERIFY(backend.move(12,28));
+        QCOMPARE(board->property("azimuth").toDouble(),180.0);
+        board->setProperty("manualAzimuth",30.0);
+        backend.selectSquare(52);
+        QCOMPARE(board->property("azimuth").toDouble(),210.0);
+        backend.setAutoRotate(false);
+        QTest::keyClick(window,Qt::Key_R);
+        backend.newGame(false,0);
+        backend.setReducedMotion(false);
+        QTest::qWait(450);
+        auto *pawn=window->findChild<QObject *>("figure-20");
+        QVERIFY(pawn);
+        QVERIFY(backend.move(12,28));
+        QTest::qWait(100);
+        QVERIFY(pawn->property("lift").toDouble()>0);
+        QVERIFY(pawn->property("z").toDouble()>.5);
+        QVERIFY(pawn->property("z").toDouble()<2.5);
+        backend.undo();
+        QTRY_COMPARE_WITH_TIMEOUT(pawn->property("z").toDouble(),2.5,1500);
+        QTRY_COMPARE_WITH_TIMEOUT(pawn->property("lift").toDouble(),0.0,1500);
+        auto *hop=pawn->findChild<QObject *>("moveHop");
+        QVERIFY(hop);
+        QVERIFY(backend.move(12,28));
+        QVERIFY(hop->property("running").toBool());
+        backend.setReducedMotion(true);
+        QVERIFY(!hop->property("running").toBool());
+        QCOMPARE(pawn->property("lift").toDouble(),0.0);
+        QCOMPARE(pawn->property("z").toDouble(),.5);
+
+        backend.newGame(false,0);
+        QTest::qWait(100);
+        auto *scene=window->findChild<QObject *>("scene");
+        QVERIFY(scene);
+        auto clickSquare = [&](int square) {
+            QVector3D point;
+            const QVector3D world(square%8-3.5f,backend.position().board[square].kind ? .7f : .12f,3.5f-square/8);
+            const bool mapped=QMetaObject::invokeMethod(scene,"mapFrom3DScene",Q_RETURN_ARG(QVector3D,point),Q_ARG(QVector3D,world));
+            if (!mapped) return false;
+            const auto location=board->mapToScene(QPointF(point.x(),point.y()));
+            QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,location.toPoint());
+            return true;
+        };
+        QVERIFY(clickSquare(12));
+        QCOMPARE(backend.selected(),12);
+        QVERIFY(clickSquare(28));
+        QCOMPARE(backend.moves(),QStringList{"e4"});
+
+        for (int promotion : {5,4,3,2}) {
+            backend.newGame(false,0);
+            for (const auto &move : std::vector<Chess::Move>{{8,24},{55,39},{24,32},{39,31},{32,40},{31,23},{40,49},{23,14}})
+                QVERIFY(backend.move(move.from,move.to));
+            QVERIFY(backend.move(49,56));
+            auto *promotionDialog=window->findChild<QObject *>("promotionDialog");
+            QTRY_VERIFY(promotionDialog->property("opened").toBool());
+            const QString name="promotion-"+QString::number(promotion);
+            std::function<QQuickItem *(QQuickItem *)> findVisual = [&](QQuickItem *item) -> QQuickItem * {
+                if (item->objectName()==name) return item;
+                for (auto child : item->childItems()) if (auto found=findVisual(child)) return found;
+                return nullptr;
+            };
+            auto *button=findVisual(window->contentItem());
+            QVERIFY(button);
+            const auto point=button->mapToScene(QPointF(button->width()/2,button->height()/2));
+            QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,point.toPoint());
+            QTRY_VERIFY(!backend.promotionPending());
+            QCOMPARE(backend.position().board[56].kind,promotion);
+            QTRY_VERIFY(!promotionDialog->property("visible").toBool());
+        }
         QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
         QCoreApplication::removeTranslator(&translator);
     }

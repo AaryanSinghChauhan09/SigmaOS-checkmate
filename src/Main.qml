@@ -16,6 +16,7 @@ ApplicationWindow {
   Material.accent: theme.accent
   Material.background: theme.background
   Material.foreground: theme.foreground
+  Overlay.modal: Rectangle { color: "#80000000" }
   font.family: "sans-serif"
   font.pixelSize: 14
   property color line: Qt.alpha(theme.foreground,.13)
@@ -24,7 +25,7 @@ ApplicationWindow {
   property var setDescriptions: [qsTr("Across the stars"),qsTr("Wood, ivory & brass"),qsTr("A woodland tale"),qsTr("A little sweetness")]
   property var setColors: ["#d9ad69","#c99b6b","#93a775","#db9eb2"]
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
-  property bool modalOpen: newGameDialog.opened || settingsDialog.opened || helpDialog.opened || promotionDialog.opened
+  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible
   function statusText() {
     if (backend.outcome === "white-wins") return qsTr("White wins by checkmate")
     if (backend.outcome === "black-wins") return qsTr("Black wins by checkmate")
@@ -93,7 +94,7 @@ ApplicationWindow {
             spacing: 18
             RowLayout {
               Layout.fillWidth: true
-              Text { text: backend.computer ? qsTr("VS COMPUTER") : qsTr("TWO PLAYERS"); font.pixelSize: 10; font.letterSpacing: 2; color: window.muted; Layout.fillWidth: true }
+              Text { text: backend.computer ? qsTr("VS COMPUTER") : qsTr("TWO PLAYERS"); font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 2; color: window.muted; Layout.fillWidth: true }
               Text { text: "●"; color: window.setColors[backend.pieceSet]; font.pixelSize: 9 }
             }
             Text { text: backend.computer ? window.difficultyNames[backend.difficulty] : qsTr("One board. Two minds."); color: theme.foreground; font.family: "serif"; font.pixelSize: 23; Layout.fillWidth: true; wrapMode: Text.WordWrap }
@@ -122,7 +123,7 @@ ApplicationWindow {
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
             Text { objectName: "status"; text: window.statusText(); color: backend.checked ? theme.colors.red : theme.foreground; font.pixelSize: 17; font.family: "serif"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Text { text: qsTr("MOVE HISTORY"); color: window.muted; font.pixelSize: 10; font.letterSpacing: 1.8 }
+            Text { text: qsTr("MOVE HISTORY"); color: window.muted; font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 1.8 }
             ListView {
               id: history
               objectName: "history"
@@ -148,7 +149,7 @@ ApplicationWindow {
               Text { anchors { top: parent.top; left: parent.left } visible: history.count === 0; text: qsTr("Every great game starts\nwith a single move."); color: window.muted; font.pixelSize: 12; lineHeight: 1.6 }
             }
             FlatButton { objectName: "undoButton"; text: qsTr("↶  Undo move"); Layout.fillWidth: true; enabled: backend.canUndo; onClicked: backend.undo() }
-            Text { text: qsTr("Saved automatically · No time limit"); font.pixelSize: 10; color: window.muted; Layout.alignment: Qt.AlignHCenter }
+            Text { text: backend.saveHealthy ? qsTr("Saved automatically · No time limit") : qsTr("Game is not being saved"); font.pixelSize: 10; color: window.muted; Layout.alignment: Qt.AlignHCenter }
           }
         }
       }
@@ -214,12 +215,20 @@ ApplicationWindow {
     modal: true
     focus: true
     title: qsTr("A new match")
-    standardButtons: Dialog.Ok | Dialog.Cancel
+    footer: DialogButtonBox {
+      LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+      LayoutMirroring.childrenInherit: true
+      Button { text: qsTr("Start game"); DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole; Material.roundedScale: theme.radius }
+      Button { text: qsTr("Cancel"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole; Material.roundedScale: theme.radius }
+      onAccepted: newGameDialog.accept()
+      onRejected: newGameDialog.reject()
+    }
     Material.roundedScale: theme.radius
     onOpened: {
       mode.currentIndex = backend.computer ? 0 : 1
       level.currentIndex = backend.difficulty
       side.currentIndex = backend.humanWhite ? 0 : 1
+      mode.forceActiveFocus()
     }
     onAccepted: { backend.newGame(mode.currentIndex === 0,level.currentIndex,side.currentIndex === 0); board.resetCamera() }
     contentItem: ColumnLayout {
@@ -227,9 +236,9 @@ ApplicationWindow {
       LayoutMirroring.childrenInherit: true
       spacing: 16
       Label { text: backend.canUndo ? qsTr("Starting a new match replaces the saved game.") : qsTr("Choose your opponent and settle in."); wrapMode: Text.WordWrap; Layout.fillWidth: true }
-      ComboBox { id: mode; objectName: "mode"; Layout.fillWidth: true; model: [qsTr("Play against the computer"),qsTr("Two players · same device")]; Material.roundedScale: theme.radius }
-      ComboBox { id: level; Layout.fillWidth: true; model: window.difficultyNames; visible: mode.currentIndex === 0; Material.roundedScale: theme.radius }
-      ComboBox { id: side; Layout.fillWidth: true; model: [qsTr("Play as White"),qsTr("Play as Black")]; visible: mode.currentIndex === 0; Material.roundedScale: theme.radius }
+      ComboBox { leftPadding: mirrored ? 40 : 16; rightPadding: mirrored ? 16 : 40; id: mode; objectName: "mode"; Layout.fillWidth: true; model: [qsTr("Play against the computer"),qsTr("Two players · same device")]; Material.roundedScale: theme.radius }
+      ComboBox { leftPadding: mirrored ? 40 : 16; rightPadding: mirrored ? 16 : 40; id: level; Layout.fillWidth: true; model: window.difficultyNames; visible: mode.currentIndex === 0; Material.roundedScale: theme.radius }
+      ComboBox { leftPadding: mirrored ? 40 : 16; rightPadding: mirrored ? 16 : 40; id: side; Layout.fillWidth: true; model: [qsTr("Play as White"),qsTr("Play as Black")]; visible: mode.currentIndex === 0; Material.roundedScale: theme.radius }
     }
   }
   Dialog {
@@ -239,7 +248,12 @@ ApplicationWindow {
     modal: true
     focus: true
     title: qsTr("Make yourself comfortable")
-    standardButtons: Dialog.Close
+    footer: DialogButtonBox {
+      LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+      LayoutMirroring.childrenInherit: true
+      Button { text: qsTr("Close"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole; Material.roundedScale: theme.radius }
+      onRejected: settingsDialog.close()
+    }
     Material.roundedScale: theme.radius
     contentItem: ColumnLayout {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
@@ -258,17 +272,23 @@ ApplicationWindow {
     modal: true
     focus: true
     title: qsTr("At your fingertips")
-    standardButtons: Dialog.Close
+    footer: DialogButtonBox {
+      LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+      LayoutMirroring.childrenInherit: true
+      Button { text: qsTr("Close"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole; Material.roundedScale: theme.radius }
+      onRejected: helpDialog.close()
+    }
     Material.roundedScale: theme.radius
     contentItem: Label {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
+      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
       wrapMode: Text.WordWrap
       lineHeight: 1.4
     }
   }
   Dialog {
     id: promotionDialog
+    objectName: "promotionDialog"
     anchors.centerIn: parent
     width: 420
     modal: true
@@ -284,6 +304,7 @@ ApplicationWindow {
         model: [5,4,3,2]
         FlatButton {
           required property int modelData
+          objectName: "promotion-" + modelData
           text: ["","","♘","♗","♖","♕"][modelData]
           font.pixelSize: 32
           Layout.fillWidth: true
@@ -301,10 +322,15 @@ ApplicationWindow {
     }
   }
   Shortcut { sequence: "?"; enabled: !window.modalOpen; onActivated: helpDialog.open() }
+  Shortcut { sequence: "S"; enabled: !window.modalOpen; onActivated: settingsDialog.open() }
   Shortcut { sequence: "Q"; enabled: !window.modalOpen; onActivated: window.close() }
   Shortcut { sequence: "N"; enabled: !window.modalOpen; onActivated: newGameDialog.open() }
-  Shortcut { sequence: StandardKey.Undo; enabled: !window.modalOpen; onActivated: backend.undo() }
-  Shortcut { sequence: "F"; enabled: !window.modalOpen; onActivated: board.azimuth += 180 }
+  Shortcut { sequences: [StandardKey.Undo]; enabled: !window.modalOpen; onActivated: backend.undo() }
+  Shortcut { sequence: "F"; enabled: !window.modalOpen; onActivated: board.manualAzimuth += 180 }
+  Shortcut { sequence: "1"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 0 }
+  Shortcut { sequence: "2"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 1 }
+  Shortcut { sequence: "3"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 2 }
+  Shortcut { sequence: "4"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 3 }
   Shortcut { sequence: "R"; enabled: !window.modalOpen; onActivated: board.resetCamera() }
   Shortcut { sequence: "Escape"; enabled: !window.modalOpen; onActivated: backend.cancelSelection() }
   Shortcut { sequences: ["Space","Return"]; enabled: !window.modalOpen; onActivated: board.keyboardSelect() }

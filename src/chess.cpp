@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+#include <limits>
 #include <stdexcept>
 
 namespace Chess {
@@ -151,8 +152,8 @@ Position Position::after(Move move) const {
   for (auto entry : {std::pair<int,int>{0,2}, {7,1}, {56,8}, {63,4}})
     if (move.from == entry.first || move.to == entry.first) next.castle &= ~entry.second;
   next.ep = piece.kind == Pawn && std::abs(move.to - move.from) == 16 ? (move.to + move.from) / 2 : -1;
-  next.halfmove = piece.kind == Pawn || capture ? 0 : halfmove + 1;
-  next.fullmove += !white;
+  next.halfmove = piece.kind == Pawn || capture ? 0 : halfmove < std::numeric_limits<int>::max() ? halfmove + 1 : halfmove;
+  next.fullmove += !white && fullmove < std::numeric_limits<int>::max();
   next.white = !white;
   return next;
 }

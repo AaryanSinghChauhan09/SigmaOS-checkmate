@@ -8,20 +8,32 @@
 #include <QUrl>
 
 #include "backend.h"
+#include "cli.h"
 #include "sculptgeometry.h"
+#include "surfacetexture.h"
+#include <QQuick3D>
 #include <iostream>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QStandardPaths>
+#include <QQuickWindow>
+#include <QElapsedTimer>
+#include <QThread>
 #include "theme.h"
 #include "translator.h"
 
 int main(int argc, char *argv[]) {
     const std::string command = argc > 1 ? argv[1] : "open";
     if (command == "--help" || command == "--version") {
-      std::cout << (command == "--version" ? "Checkmate 0.1.0\n" : "Checkmate — 3D chess\nUsage: checkmate [open | --help | --version]\n");
+      std::cout << (command == "--version" ? "Checkmate 0.1.0\n" : "Checkmate — 3D chess\nUsage: checkmate [open | inspect | export | legal [FEN] | --help | --version]\nHeadless commands accept --json. export prints PGN to stdout.\n");
       return 0;
     }
+    if (command == "inspect" || command == "export" || command == "legal") return runCli(argc,argv);
     if (command != "open" || argc > 2) { std::cerr << "Unknown command. Use checkmate --help.\n"; return 1; }
     QGuiApplication app(argc, argv);
+    QSurfaceFormat::setDefaultFormat(QQuick3D::idealSurfaceFormat());
     qmlRegisterType<SculptGeometry>("Checkmate", 1, 0, "SculptGeometry");
+    qmlRegisterType<SurfaceTexture>("Checkmate",1,0,"SurfaceTexture");
     app.setApplicationName("checkmate");
     app.setApplicationVersion("0.1.0");
 
@@ -39,7 +51,27 @@ int main(int argc, char *argv[]) {
     app.installTranslator(&translator);
 
     Theme theme;
+    const QString socketName = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + "/checkmate.sock";
+    QLocalSocket existing;
+    existing.connectToServer(socketName);
+    if (existing.waitForConnected(100)) return 0;
+
     Backend backend;
+    if (!backend.ownsSave()) {
+      QElapsedTimer startup;
+      startup.start();
+      while (startup.elapsed() < 2000) {
+        existing.abort(); existing.connectToServer(socketName);
+        if (existing.waitForConnected(100)) return 0;
+        QThread::msleep(50);
+      }
+      std::cerr << backend.error().toStdString() << "\n";
+      return 1;
+    }
+    QLocalServer server;
+    server.setSocketOptions(QLocalServer::UserAccessOption);
+    QLocalServer::removeServer(socketName);
+    if (!server.listen(socketName)) { std::cerr << server.errorString().toStdString() << "\n"; return 1; }
 
     QQmlApplicationEngine engine;
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
@@ -50,5 +82,12 @@ int main(int argc, char *argv[]) {
     if (engine.rootObjects().isEmpty())
         return 1;
 
+    QObject::connect(&server,&QLocalServer::newConnection,&app,[&] {
+      while (auto connection = server.nextPendingConnection()) {
+        connection->disconnectFromServer(); connection->deleteLater();
+      }
+      auto window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+      if (window) { window->showNormal(); window->raise(); window->requestActivate(); }
+    });
     return app.exec();
 }

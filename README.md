@@ -19,12 +19,14 @@ The rules include castling, en passant, all four promotion choices, checkmate, s
 | N | New game |
 | F | Flip board |
 | R | Reset camera |
+| 1–4 | Switch piece set |
+| S | Settings |
 | ? | Show shortcuts |
 | Q | Quit |
 
 ## Build
 
-Dependencies: CMake, a C++17 compiler, Qt 6 base, declarative, Quick 3D, SVG, and Wayland. On Arch, install `base-devel cmake qt6-base qt6-declarative qt6-quick3d qt6-svg qt6-wayland`.
+Dependencies: CMake, a C++17 compiler, Qt 6 base, declarative, Quick 3D, SVG, and Wayland. On Arch, install `base-devel cmake qt6-base qt6-declarative qt6-quick3d qt6-svg qt6-wayland xorg-server-xvfb xorg-xauth mesa ttf-dejavu`.
 
 ```bash
 bin/build
@@ -33,7 +35,25 @@ build/checkmate open
 cmake --install build --prefix ~/.local
 ```
 
+The tests use a virtual display with the offscreen platform and Mesa software OpenGL, and fail on Qt warnings so a blank 3D viewport cannot pass unnoticed.
+
 The package recipe belongs in omarchy-pkgs. CI reads dependencies from that recipe once it lands; until then `bin/test` is the local check. Tests exercise the real QML window, theme and language watchers, chess move trees, special moves, draw detection, undo, save/restore, and computer cancellation.
+
+## Headless commands
+
+These commands do not need a display and do not change the saved game:
+
+```bash
+checkmate inspect --json
+checkmate export > game.pgn
+checkmate export --json
+checkmate legal --json
+checkmate legal 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' --json
+```
+
+`inspect` reports FEN, moves, and the result; `export` prints PGN; `legal` lists coordinate moves for a FEN or the starting position. Errors go to stderr with exit status 1. Successful commands exit 0. A second graphical launch brings the existing game forward instead of opening a competing writer.
+
+English, Danish, and Arabic catalogs are included. Other Omarchy languages currently fall back to English. The board keeps standard chess coordinates when the surrounding interface mirrors for right-to-left reading.
 
 All 3D pieces are generated from original geometry in the binary. No downloaded models, franchise characters, network connection, or separate chess engine is needed. The game is saved atomically in the standard application data directory as `checkmate/game.json`.
 

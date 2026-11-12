@@ -11,9 +11,29 @@
 #include <QTimer>
 #include <algorithm>
 
+namespace {
+QString adjudicate(const Chess::Position &p, const std::vector<Chess::Move> &legal, int repetitions) {
+  if (legal.empty()) return p.check(p.white) ? (p.white ? "black-wins" : "white-wins") : "stalemate";
+  if (p.insufficient()) return "material";
+  if (p.halfmove >= 100) return "fifty-moves";
+  if (repetitions >= 3) return "repetition";
+  return {};
+}
+}
+
 Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_savePath(savePath) {
   if (m_savePath.isEmpty()) m_savePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/game.json";
-  restore();
+  m_repetitions[position().key()] = 1;
+  if (m_savePath != ":memory:") {
+    QDir().mkpath(QFileInfo(m_savePath).absolutePath());
+    m_saveLock = std::make_unique<QLockFile>(m_savePath + ".lock");
+    m_saveLock->setStaleLockTime(0);
+    if (!m_saveLock->tryLock(0)) {
+      m_saveBlocked = true;
+      m_error = tr("Another Checkmate window owns this saved game, or its folder is not writable.");
+    }
+  }
+  if (ownsSave()) restore();
   refresh();
   QTimer::singleShot(0, this, &Backend::scheduleComputer);
 }
@@ -25,16 +45,7 @@ QVariantList Backend::targets() const {
 }
 void Backend::refresh() {
   m_legal = position().legal();
-  m_outcome.clear();
-  if (m_legal.empty()) m_outcome = checked() ? (whiteTurn() ? "black-wins" : "white-wins") : "stalemate";
-  else if (position().insufficient()) m_outcome = "material";
-  else if (position().halfmove >= 100) m_outcome = "fifty-moves";
-  else {
-    int repetitions = 0;
-    auto key = position().key();
-    for (const auto &p : m_positions) repetitions += p.key() == key;
-    if (repetitions >= 3) m_outcome = "repetition";
-  }
+  m_outcome = adjudicate(position(),m_legal,m_repetitions[position().key()]);
   if (m_pieces.isEmpty()) {
     for (int id = 0; id < 32; ++id) m_pieces.append(QVariantMap{{"id",id},{"kind",1},{"white",true},{"square",0},{"alive",false}});
   }
@@ -75,6 +86,7 @@ void Backend::apply(Chess::Move move) {
   m_notation.append(QString::fromStdString(position().san(move)));
   m_positions.push_back(position().after(move));
   m_moves.push_back(move);
+  ++m_repetitions[position().key()];
   m_selected = -1;
   refresh();
   emit moved(piece.id,piece.kind == Chess::Knight,capture);
@@ -109,14 +121,18 @@ void Backend::scheduleComputer() {
 }
 void Backend::newGame(bool computer, int difficulty, bool humanWhite) {
   cancelComputer();
+  if (!ownsSave()) return;
+  m_saveBlocked = false; m_error.clear();
   m_computer = computer; m_difficulty = std::clamp(difficulty,0,2); m_humanWhite = humanWhite;
   m_positions = {Chess::Position::initial()}; m_moves.clear(); m_notation.clear(); m_pending = {}; m_selected = -1;
+  m_repetitions.clear(); m_repetitions[position().key()] = 1;
   refresh(); save(); scheduleComputer();
 }
 void Backend::undo() {
-  if (m_moves.empty()) return;
+  if (!canUndo()) return;
   cancelComputer();
   do {
+    --m_repetitions[position().key()];
     m_positions.pop_back(); m_moves.pop_back(); m_notation.removeLast();
   } while (m_computer && !m_moves.empty() && whiteTurn() != m_humanWhite);
   m_selected = -1; m_pending = {};
@@ -136,7 +152,7 @@ void Backend::setAutoRotate(bool value) {
   m_autoRotate = value; emit preferencesChanged(); save();
 }
 void Backend::save() {
-  if (m_savePath == ":memory:") return;
+  if (m_savePath == ":memory:" || m_saveBlocked || !ownsSave()) return;
   QJsonArray moves;
   for (auto m : m_moves) moves.append(QJsonArray{m.from,m.to,m.promotion});
   QJsonObject data{{"version",1},{"moves",moves},{"computer",m_computer},{"humanWhite",m_humanWhite},
@@ -146,18 +162,26 @@ void Backend::save() {
   file.setDirectWriteFallback(false);
   const auto bytes = QJsonDocument(data).toJson();
   if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+    m_saveFailed = true;
     m_error = tr("Could not save your game: %1").arg(file.errorString()); emit changed();
+  } else if (m_saveFailed) {
+    m_saveFailed = false; m_error.clear(); emit changed();
   }
 }
 void Backend::restore() {
   if (m_savePath == ":memory:" || !QFile::exists(m_savePath)) return;
   QFile file(m_savePath);
-  if (!file.open(QIODevice::ReadOnly)) { m_error = tr("Could not open your saved game: %1").arg(file.errorString()); return; }
+  if (!file.open(QIODevice::ReadOnly)) { m_saveBlocked = true; m_error = tr("Could not open your saved game: %1").arg(file.errorString()); return; }
+  if (file.size() > 2 * 1024 * 1024) {
+    m_saveBlocked = true; m_error = tr("The saved game is too large to open."); return;
+  }
   QJsonParseError error;
   auto data = QJsonDocument::fromJson(file.readAll(),&error).object();
   auto invalid = [&] {
+    m_saveBlocked = true;
     m_positions = {Chess::Position::initial()}; m_moves.clear(); m_notation.clear();
     // Keep the damaged save intact until the player explicitly starts again.
+    m_repetitions.clear(); m_repetitions[position().key()] = 1;
     m_error = tr("The saved game is damaged. Start a new game to replace it.");
   };
   if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 5000) { invalid(); return; }
@@ -166,9 +190,10 @@ void Backend::restore() {
     if (entry.size() != 3) { invalid(); return; }
     Chess::Move move{entry[0].toInt(-1),entry[1].toInt(-1),entry[2].toInt(-1)};
     const auto legal = position().legal();
-    if (std::find(legal.begin(),legal.end(),move) == legal.end()) { invalid(); return; }
+    if (!adjudicate(position(),legal,m_repetitions[position().key()]).isEmpty() || std::find(legal.begin(),legal.end(),move) == legal.end()) { invalid(); return; }
     m_notation.append(QString::fromStdString(position().san(move)));
     m_positions.push_back(position().after(move)); m_moves.push_back(move);
+    ++m_repetitions[position().key()];
   }
   m_computer = data["computer"].toBool(true); m_humanWhite = data["humanWhite"].toBool(true);
   m_difficulty = std::clamp(data["difficulty"].toInt(1),0,2); m_pieceSet = std::clamp(data["pieceSet"].toInt(),0,3);

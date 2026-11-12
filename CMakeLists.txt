@@ -28,8 +28,10 @@ target_link_libraries(checkmate PRIVATE checkmate_core)
 enable_testing()
 add_executable(checkmate_tests tests/checkmate_tests.cpp src/resources.qrc)
 target_link_libraries(checkmate_tests PRIVATE checkmate_core Qt6::Test)
-add_test(NAME checkmate_tests COMMAND checkmate_tests)
-set_tests_properties(checkmate_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+add_dependencies(checkmate_tests checkmate)
+find_program(XVFB_RUN xvfb-run REQUIRED)
+add_test(NAME checkmate_tests COMMAND ${XVFB_RUN} -a $<TARGET_FILE:checkmate_tests>)
+set_tests_properties(checkmate_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=rhi;QSG_RHI_BACKEND=opengl;LIBGL_ALWAYS_SOFTWARE=1")
 
 # `cmake --install build --prefix ~/.local` puts the app in the launcher
 # before it is packaged; a package installs the same files under /usr.

@@ -1,8 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=Checkmate
+Name[da]=Checkmate
+Name[ar]=Checkmate
 Comment=Beautiful 3D chess for one or two players
 Comment[da]=Smuk 3D-skak for en eller to spillere
+Comment[ar]=شطرنج ثلاثي الأبعاد للاعب أو لاعبين
 Exec=checkmate open
 Icon=checkmate
 Terminal=false

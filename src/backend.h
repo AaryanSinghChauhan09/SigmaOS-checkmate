@@ -5,6 +5,8 @@
 #include <QFutureWatcher>
 #include <QVariantList>
 #include <QStringList>
+#include <QLockFile>
+#include <unordered_map>
 
 class Backend : public QObject {
   Q_OBJECT
@@ -27,6 +29,7 @@ class Backend : public QObject {
   Q_PROPERTY(int pieceSet READ pieceSet WRITE setPieceSet NOTIFY preferencesChanged)
   Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY preferencesChanged)
   Q_PROPERTY(bool autoRotate READ autoRotate WRITE setAutoRotate NOTIFY preferencesChanged)
+  Q_PROPERTY(bool saveHealthy READ saveHealthy NOTIFY changed)
   Q_PROPERTY(QString error READ error NOTIFY changed)
   Q_PROPERTY(QString fen READ fen NOTIFY changed)
 public:
@@ -41,7 +44,7 @@ public:
   bool finished() const { return !m_outcome.isEmpty(); }
   QString outcome() const { return m_outcome; }
   QStringList moves() const { return m_notation; }
-  bool canUndo() const { return !m_moves.empty(); }
+  bool canUndo() const { return !m_moves.empty() && (!m_computer || m_humanWhite || m_moves.size() > 1); }
   bool promotionPending() const { return m_pending.to >= 0; }
   int lastFrom() const { return m_moves.empty() ? -1 : m_moves.back().from; }
   int lastTo() const { return m_moves.empty() ? -1 : m_moves.back().to; }
@@ -51,7 +54,9 @@ public:
   int pieceSet() const { return m_pieceSet; }
   bool reducedMotion() const { return m_reducedMotion; }
   bool autoRotate() const { return m_autoRotate; }
+  bool saveHealthy() const { return ownsSave() && !m_saveBlocked && !m_saveFailed; }
   QString error() const { return m_error; }
+  bool ownsSave() const { return m_savePath == ":memory:" || (m_saveLock && m_saveLock->isLocked()); }
   QString fen() const { return QString::fromStdString(position().fen()); }
   const Chess::Position &position() const { return m_positions.back(); }
   Q_INVOKABLE void selectSquare(int square);
@@ -76,6 +81,8 @@ private:
   void save();
   void restore();
   std::vector<Chess::Position> m_positions{Chess::Position::initial()};
+  std::unordered_map<std::string,int> m_repetitions;
+  std::unique_ptr<QLockFile> m_saveLock;
   std::vector<Chess::Move> m_moves;
   std::vector<Chess::Move> m_legal;
   QStringList m_notation;
@@ -85,7 +92,7 @@ private:
   QString m_outcome, m_error, m_savePath;
   bool m_computer = true, m_humanWhite = true, m_thinking = false;
   int m_difficulty = 1, m_pieceSet = 0;
-  bool m_reducedMotion = false, m_autoRotate = false;
+  bool m_reducedMotion = false, m_autoRotate = false, m_saveBlocked = false, m_saveFailed = false;
   unsigned m_generation = 0;
   std::shared_ptr<std::atomic_bool> m_cancel;
 };
