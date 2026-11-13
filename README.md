@@ -28,7 +28,7 @@ The rules include castling, en passant, all four promotion choices, checkmate, s
 
 ## Build
 
-Dependencies: CMake, a C++17 compiler, Qt 6 base, declarative, Quick 3D, SVG, and Wayland. On Arch, install `base-devel cmake qt6-base qt6-declarative qt6-quick3d qt6-svg qt6-wayland xorg-server-xvfb xorg-xauth mesa ttf-dejavu`.
+Dependencies: CMake, a C++17 compiler, Qt 6 base, declarative, Quick 3D, SVG, and Wayland. `bin/build` installs missing build and test dependencies automatically on Arch/Omarchy, asking for your sudo password if needed. Subsequent builds skip installation when everything is present. Other distributions need these dependencies installed through their package manager first.
 
 ```bash
 bin/build
