@@ -81,10 +81,6 @@ Item {
       antialiasingMode: SceneEnvironment.MSAA
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
-      aoEnabled: true
-      aoStrength: 12
-      aoDistance: .3
-      aoSoftness: 50
     }
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
     Node {
