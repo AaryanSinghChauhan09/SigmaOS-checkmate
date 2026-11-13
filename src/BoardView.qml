@@ -8,7 +8,7 @@ Item {
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
   property real manualAzimuth: 0
   property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
-  property real elevation: -44
+  property real elevation: -52
   property real distance: 13.2
   property int cursorSquare: 12
   property bool keyboardMode: false
@@ -23,7 +23,7 @@ Item {
   focus: true
   function resetCamera() {
     manualAzimuth = 0
-    elevation = -44
+    elevation = -52
     distance = 13.2
   }
   function keyboardSelect() { keyboardMode = true; backend.selectSquare(cursorSquare) }
@@ -82,8 +82,8 @@ Item {
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
       aoEnabled: true
-      aoStrength: 35
-      aoDistance: .8
+      aoStrength: 12
+      aoDistance: .3
       aoSoftness: 50
     }
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }

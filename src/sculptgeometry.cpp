@@ -5,6 +5,7 @@
 #include <QVector3D>
 #include <QVector4D>
 #include <algorithm>
+#include <map>
 #include <vector>
 #include <cmath>
 
@@ -14,6 +15,14 @@ struct Vertex { QVector3D position, normal; QVector2D uv; };
 struct Mesh {
   std::vector<Vertex> vertices;
   void triangle(QVector3D a, QVector3D b, QVector3D c, QVector3D na, QVector3D nb, QVector3D nc) {
+    const auto face=QVector3D::crossProduct((b-a).normalized(),(c-a).normalized()).normalized();
+    if(na.lengthSquared()<.01f) na=face;
+    if(nb.lengthSquared()<.01f) nb=face;
+    if(nc.lengthSquared()<.01f) nc=face;
+    // Qt flips back-face normals, so winding must agree with the sculpted normals.
+    if (QVector3D::dotProduct(QVector3D::crossProduct(b-a,c-a),na+nb+nc)<0) {
+      std::swap(b,c); std::swap(nb,nc);
+    }
     auto uv = [](QVector3D p) { return QVector2D(std::atan2(p.z(),p.x())/(2*pi)+.5f,p.y()); };
     vertices.push_back({a,na,uv(a)}); vertices.push_back({b,nb,uv(b)}); vertices.push_back({c,nc,uv(c)});
   }
@@ -33,12 +42,13 @@ struct Mesh {
     }
   }
   void sphere(QVector3D center, QVector3D scale) {
-    std::vector<QVector2D> profile;
-    for (int i = 0; i <= 16; ++i) {
-      float t = pi*i/16;
-      profile.push_back({std::sin(t),-std::cos(t)});
+    auto point=[&](float u,float v) { return center+QVector3D(scale.x()*std::sin(v)*std::cos(u),scale.y()*std::cos(v),scale.z()*std::sin(v)*std::sin(u)); };
+    auto norm=[&](float u,float v) { return QVector3D(std::sin(v)*std::cos(u)/scale.x(),std::cos(v)/scale.y(),std::sin(v)*std::sin(u)/scale.z()).normalized(); };
+    for(int j=0;j<12;++j) for(int i=0;i<24;++i) {
+      float a=2*pi*i/24,b=2*pi*(i+1)/24,c=pi*j/12,d=pi*(j+1)/12;
+      triangle(point(a,c),point(a,d),point(b,d),norm(a,c),norm(a,d),norm(b,d));
+      triangle(point(a,c),point(b,d),point(b,c),norm(a,c),norm(b,d),norm(b,c));
     }
-    QMatrix4x4 matrix; matrix.translate(center); matrix.scale(scale); lathe(profile,matrix,24);
   }
   void ring(QVector3D center, float radius, float tube, QVector3D rotation = {}, float sweep = 360) {
     QMatrix4x4 transform; transform.translate(center); transform.rotate(rotation.x(),1,0,0); transform.rotate(rotation.y(),0,1,0); transform.rotate(rotation.z(),0,0,1);
@@ -61,13 +71,29 @@ struct Mesh {
       triangle(a,b,c,n,n,n); triangle(a,c,d,n,n,n);
     }
   }
+  void roundedBox(QVector3D center,QVector3D size,float radius,float rotation) {
+    QMatrix4x4 matrix; matrix.translate(center); matrix.rotate(rotation,0,1,0);
+    QVector3D core=size*.5f-QVector3D(radius,radius,radius);
+    for(int axis=0;axis<3;++axis) for(float sign:{-1.f,1.f}) {
+      auto sample=[&](float u,float v) {
+        QVector3D p; p[axis]=sign*size[axis]*.5f; p[(axis+1)%3]=u*size[(axis+1)%3]; p[(axis+2)%3]=v*size[(axis+2)%3];
+        QVector3D nearest; for(int k=0;k<3;++k) nearest[k]=std::clamp(p[k],-core[k],core[k]);
+        auto normal=(p-nearest).normalized();
+        return std::pair<QVector3D,QVector3D>(matrix.map(nearest+normal*radius),matrix.mapVector(normal));
+      };
+      for(int i=0;i<8;++i) for(int j=0;j<8;++j) {
+        auto a=sample(i/8.f-.5f,j/8.f-.5f),b=sample((i+1)/8.f-.5f,j/8.f-.5f),c=sample((i+1)/8.f-.5f,(j+1)/8.f-.5f),d=sample(i/8.f-.5f,(j+1)/8.f-.5f);
+        triangle(a.first,b.first,c.first,a.second,b.second,c.second); triangle(a.first,c.first,d.first,a.second,c.second,d.second);
+      }
+    }
+  }
   void branch(QVector3D a, QVector3D b, float radius) {
     auto direction = b-a;
     QMatrix4x4 matrix; matrix.translate(a); matrix.rotate(QQuaternion::rotationTo(QVector3D(0,1,0),direction.normalized()));
     lathe({{0,0},{radius,0},{radius*.7f,direction.length()},{0,direction.length()}},matrix);
   }
 
-  void turned(const std::vector<QVector2D> &profile) {
+  void turned(const std::vector<QVector2D> &profile,const QMatrix4x4 &transform = {}) {
     std::vector<QVector2D> smooth;
     for (size_t i=0;i+1<profile.size();++i) {
       auto a=profile[i ? i-1 : i], b=profile[i], c=profile[i+1], d=profile[std::min(i+2,profile.size()-1)];
@@ -77,20 +103,27 @@ struct Mesh {
         p.setX(std::max(0.f,p.x())); smooth.push_back(p);
       }
     }
-    smooth.push_back(profile.back()); lathe(smooth);
+    smooth.push_back(profile.back()); lathe(smooth,transform);
   }
   void tube(const std::vector<QVector3D> &points, float radius, float endRadius=-1) {
     if (endRadius<0) endRadius=radius;
-    for (size_t i=0;i+1<points.size();++i) {
-      auto direction=points[i+1]-points[i];
-      QMatrix4x4 matrix; matrix.translate(points[i]);
-      matrix.rotate(QQuaternion::rotationTo({0,1,0},direction.normalized()));
-      float r=radius+(endRadius-radius)*i/(points.size()-1);
-      float next=radius+(endRadius-radius)*(i+1)/(points.size()-1);
-      lathe({{0,0},{r,0},{next,direction.length()},{0,direction.length()}},matrix,12);
-      sphere(points[i],{r,r,r});
+    auto tangent=[&](int i) { return (points[std::min(i+1,int(points.size()-1))]-points[std::max(0,i-1)]).normalized(); };
+    auto normal=[&](int i,float angle) {
+      auto t=tangent(i);
+      auto reference=std::abs(t.z())<.9f ? QVector3D(0,0,1) : QVector3D(1,0,0);
+      auto u=QVector3D::crossProduct(t,reference).normalized(),v=QVector3D::crossProduct(t,u);
+      return u*std::cos(angle)+v*std::sin(angle);
+    };
+    auto point=[&](int i,float angle) { return points[i]+normal(i,angle)*(radius+(endRadius-radius)*i/(points.size()-1)); };
+    for(int i=0;i+1<int(points.size());++i) for(int j=0;j<12;++j) {
+      float a=2*pi*j/12,b=2*pi*(j+1)/12;
+      triangle(point(i,a),point(i+1,a),point(i+1,b),normal(i,a),normal(i+1,a),normal(i+1,b));
+      triangle(point(i,a),point(i+1,b),point(i,b),normal(i,a),normal(i+1,b),normal(i,b));
     }
-    sphere(points.back(),{endRadius,endRadius,endRadius});
+    for(int i:{0,int(points.size()-1)}) for(int j=0;j<12;++j) {
+      auto n=tangent(i)*(i ? 1.f : -1.f);
+      triangle(points[i],point(i,2*pi*j/12),point(i,2*pi*(j+1)/12),n,n,n);
+    }
   }
   // Elliptical sections follow a curved spine, giving horses a continuous silhouette.
   void loft(const std::vector<QVector4D> &sections, int sides=32) {
@@ -116,6 +149,44 @@ struct Mesh {
       triangle(point(row,a),point(row+1,a),point(row+1,b),normal(row,a),normal(row+1,a),normal(row+1,b));
       triangle(point(row,a),point(row+1,b),point(row,b),normal(row,a),normal(row+1,b),normal(row,b));
     }
+    for(int row:{0,int(rows.size()-1)}) {
+      const QVector3D center(0,rows[row].x(),rows[row].z());
+      const QVector3D n(0,row ? 1.f : -1.f,0);
+      for(int i=0;i<sides;++i) triangle(center,point(row,2*pi*i/sides),point(row,2*pi*(i+1)/sides),n,n,n);
+    }
+  }
+  template<typename Point>
+  void sweptSurface(Point point,bool invert=false) {
+    auto normal=[&](float u,float v) {
+      auto along=point(std::min(1.f,u+.001f),v)-point(std::max(0.f,u-.001f),v);
+      auto around=point(u,v+.001f)-point(u,v-.001f);
+      return QVector3D::crossProduct(along.normalized(),around.normalized()).normalized()*(invert ? -1.f : 1.f);
+    };
+    for(int i=0;i<40;++i) for(int j=0;j<16;++j) {
+      float a=i/40.f,b=(i+1)/40.f,c=2*pi*j/16,d=2*pi*(j+1)/16;
+      triangle(point(a,c),point(b,c),point(b,d),normal(a,c),normal(b,c),normal(b,d));
+      triangle(point(a,c),point(b,d),point(a,d),normal(a,c),normal(b,d),normal(a,d));
+    }
+    for(float u:{0.f,1.f}) {
+      auto center=(point(u,0)+point(u,pi))*.5f;
+      auto n=QVector3D::crossProduct(point(u,0)-center,point(u,pi*.5f)-center).normalized();
+      auto along=point(std::min(1.f,u+.001f),0)-point(std::max(0.f,u-.001f),0);
+      if(QVector3D::dotProduct(n,along)*(u==0 ? -1.f : 1.f)<0) n=-n;
+      for(int j=0;j<16;++j) triangle(center,point(u,2*pi*j/16),point(u,2*pi*(j+1)/16),n,n,n);
+    }
+  }
+  void panel(float angle) {
+    sweptSurface([&](float t,float v) {
+      float a=angle+t*.8f,r=.24f-.15f*std::sin(pi*t),width=.085f+.07f*t*t;
+      return QVector3D((r+.025f*std::sin(v))*std::cos(a)-width*std::cos(v)*std::sin(a),.20f+t*.92f,(r+.025f*std::sin(v))*std::sin(a)+width*std::cos(v)*std::cos(a));
+    },true);
+  }
+  void crescent(QVector3D center) {
+    sweptSurface([&](float t,float v) {
+      float a=(65+245*t)*pi/180,taper=std::pow(std::max(0.f,std::sin(pi*t)),.7f);
+      float radius=.28f+(.002f+.075f*taper)*std::cos(v);
+      return center+QVector3D(radius*std::cos(a),radius*std::sin(a),(.002f+.035f*taper)*std::sin(v));
+    });
   }
   void leaf(QVector3D a,QVector3D tip,float width,float bulge=.025f) {
     QVector3D axis=tip-a;
@@ -149,6 +220,23 @@ void SculptGeometry::setKind(int value) { if (m_kind != value) { m_kind=value; r
 void SculptGeometry::setDesign(int value) { if (m_design != value) { m_design=value; rebuild(); emit changed(); } }
 void SculptGeometry::setPart(int value) { if (m_part != value) { m_part=value; rebuild(); emit changed(); } }
 void SculptGeometry::rebuild() {
+  struct Sculpture { QByteArray vertices; QVector3D minimum, maximum; };
+  static std::map<int,Sculpture> sculptures;
+  const int key=(m_design*6+m_kind-1)*6+m_part;
+  auto upload=[&](const Sculpture &shape) {
+    clear();
+    setVertexData(shape.vertices);
+    setStride(sizeof(Vertex));
+    setPrimitiveType(QQuick3DGeometry::PrimitiveType::Triangles);
+    addAttribute(QQuick3DGeometry::Attribute::PositionSemantic,0,QQuick3DGeometry::Attribute::F32Type);
+    addAttribute(QQuick3DGeometry::Attribute::NormalSemantic,sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
+    addAttribute(QQuick3DGeometry::Attribute::TexCoord0Semantic,2*sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
+    setBounds(shape.minimum,shape.maximum);
+    update();
+  };
+  if(m_design<0 || m_design>3 || m_kind<1 || m_kind>6 || m_part<0 || m_part>5) { clear(); update(); return; }
+  const auto found=sculptures.find(key);
+  if(found!=sculptures.end()) { upload(found->second); return; }
   Mesh mesh;
   const int kind=m_kind,part=m_part;
   const bool orbital=m_design==0, atelier=m_design==1, woodland=m_design==2, candy=m_design==3;
@@ -191,14 +279,18 @@ void SculptGeometry::rebuild() {
         float top=kind==1?.45f:kind==3?.96f:1.12f;
         mesh.loft({{.16f,.25f,0,.25f},{.26f,.23f,0,.23f},{.40f,.16f,0,.16f},{top-.12f,.075f,0,.075f},{top,.10f,0,.10f}},kind==1?32:8);
         if(kind==1) mesh.sphere({0,.61f,0},{.225f,.20f,.225f});
-        if(kind>=5) for(int i=0;i<5;++i) {
-          float a=2*pi*i/5;
-          std::vector<QVector3D> points;
-          for(int j=0;j<=12;++j) {float t=j/12.f,r=.25f-.13f*std::sin(pi*t);float twist=a+t*.55f;points.push_back({r*std::cos(twist),.21f+t*.88f,r*std::sin(twist)});}
-          mesh.tube(points,.055f,.025f);
-        }
+        if(kind>=5) for(int i=0;i<5;++i) mesh.panel(2*pi*i/5);
+        if(kind==5) mesh.crescent({.02f,1.28f,0});
       }
     } else if(part==1) {
+      if(kind>=5) for(int i=0;i<5;++i) {
+        std::vector<QVector3D> edge;
+        for(int j=0;j<=16;++j) {
+          float t=j/16.f,a=2*pi*i/5+t*.8f,r=.24f-.15f*std::sin(pi*t),width=.085f+.07f*t*t;
+          edge.push_back({r*std::cos(a)-width*std::sin(a),.20f+t*.92f,r*std::sin(a)+width*std::cos(a)});
+        }
+        mesh.tube(edge,.009f);
+      }
       if(kind==1) {
         mesh.ring({0,.57f,0},.214f,.015f);
         mesh.ring({0,.61f,-.208f},.068f,.015f,{90,0,0});
@@ -213,8 +305,15 @@ void SculptGeometry::rebuild() {
         for(int i=0;i<8;++i) {float a=2*pi*i/8;mesh.branch({.23f*std::cos(a),.29f,.23f*std::sin(a)},{.23f*std::cos(a),.79f,.23f*std::sin(a)},.012f);}
       } else if(kind==5) {
         // Two offset crescents wrap a floating orb, rather than a conventional crown.
-        mesh.arc({.02f,1.28f,0},.30f,65,310,.035f);
-        mesh.arc({.06f,1.30f,.025f},.24f,78,310,.018f);
+        for(float side:{-1.f,1.f}) {
+          std::vector<QVector3D> rim;
+          for(int i=0;i<=32;++i) {
+            float t=i/32.f,a=(65+245*t)*pi/180;
+            float radius=.28f+side*(.002f+.075f*std::pow(std::max(0.f,std::sin(pi*t)),.7f));
+            rim.push_back({.02f+radius*std::cos(a),1.28f+radius*std::sin(a),0});
+          }
+          mesh.tube(rim,.008f);
+        }
         mesh.tube({{-.19f,1.02f,0},{-.12f,.86f,-.03f},{.10f,.49f,-.13f},{.24f,.22f,-.12f}},.025f);
       } else {
         mesh.ring({0,1.39f,0},.29f,.016f,{25,0,0});
@@ -252,7 +351,7 @@ void SculptGeometry::rebuild() {
                          : std::vector<QVector2D>{{0,.15f},{.25f,.15f},{.27f,.23f},{.22f,.31f},{.18f,.68f},{.23f,.80f},{.30f,.83f},{.30f,.93f},{.23f,.93f},{.23f,.80f},{0,.80f}});
         for(int i=0;i<6;++i) {
           float a=2*pi*i/6;
-          if(candy) mesh.sphere({.26f*std::cos(a),.96f,.26f*std::sin(a)},{.10f,.13f,.10f});
+          if(candy) mesh.roundedBox({.26f*std::cos(a),.97f,.26f*std::sin(a)},{.16f,.22f,.14f},.035f,-a*180/pi);
           else mesh.box({.26f*std::cos(a),1.0f,.26f*std::sin(a)},{.15f,.16f,.10f},-a*180/pi);
         }
       }
@@ -306,11 +405,12 @@ void SculptGeometry::rebuild() {
         for(float side:{-1.f,1.f}) mesh.arc({side*.066f,.62f,-.174f},.027f,200,340,.007f);
         mesh.arc({0,.56f,-.179f},.024f,210,330,.005f);
       } else if(part==3) {
-        mesh.turned({{0,.70f},{.25f,.70f},{.26f,.74f},{.21f,.84f},{.11f,.91f},{0,.93f}});
-        mesh.branch({0,.91f,0},{.02f,1.0f,0},.035f);
+        QMatrix4x4 cap; cap.translate(0,.035f,.06f);
+        mesh.turned({{0,.70f},{.25f,.70f},{.26f,.74f},{.21f,.84f},{.11f,.91f},{0,.93f}},cap);
+        mesh.branch({0,.945f,.06f},{.02f,1.035f,.06f},.035f);
         for(int row=0;row<3;++row) for(int i=0;i<14;++i) {
           float a=2*pi*(i+.5f*(row%2))/14,r=.235f-row*.05f,y=.76f+row*.055f;
-          mesh.sphere({r*std::cos(a),y,r*std::sin(a)},{.035f,.027f,.035f});
+          mesh.sphere({r*std::cos(a),y+.035f,.06f+r*std::sin(a)},{.035f,.027f,.035f});
         }
       }
     } else if(kind==2) {
@@ -370,12 +470,17 @@ void SculptGeometry::rebuild() {
         mesh.sphere({0,1.19f,-.163f},{.034f,.047f,.035f});
         for(float side:{-1.f,1.f}) mesh.sphere({side*.18f,.61f,-.14f},{.045f,.06f,.04f});
       } else if(part==1) {
+        for(float side:{-1.f,1.f}) {
+          mesh.leaf({side*.07f,1.03f,-.12f},{side*.25f,.22f,-.19f},.12f,.05f);
+          mesh.leaf({side*.13f,.96f,.08f},{side*.28f,.24f,.08f},.16f,.04f);
+        }
         for(float side:{-1.f,1.f}) for(int i=0;i<6;++i) {
           float y=.28f+i*.105f;
           mesh.leaf({side*.09f,y+.13f,-.20f},{side*(.23f-i*.014f),y,-.17f},.06f,.025f);
         }
         if(king) {
-          mesh.turned({{0,1.29f},{.29f,1.29f},{.31f,1.33f},{.20f,1.38f},{.15f,1.50f},{.04f,1.58f},{0,1.57f}});
+          QMatrix4x4 hat; hat.translate(0,1.34f,.035f); hat.rotate(25,1,0,0);
+          mesh.turned({{0,0},{.26f,0},{.28f,.04f},{.18f,.09f},{.14f,.21f},{.04f,.29f},{0,.28f}},hat);
         } else for(int i=0;i<9;++i) {float a=2*pi*i/9;mesh.leaf({.15f*std::cos(a),1.34f,.15f*std::sin(a)},{.22f*std::cos(a),1.45f,.22f*std::sin(a)},.05f);}
       } else if(part==3) {
         if(king) {
@@ -386,9 +491,10 @@ void SculptGeometry::rebuild() {
           for(float side:{-1.f,1.f}) mesh.tube({{side*.01f,1.16f,-.18f},{side*.09f,1.13f,-.22f},{side*.15f,1.09f,-.17f}},.025f,.01f);
         } else {
           for(float side:{-1.f,1.f}) for(int i=0;i<4;++i) mesh.tube({{side*(.07f+i*.027f),1.36f,.005f},{side*(.13f+i*.018f),1.20f,.045f},{side*(.14f+i*.02f),.99f,.055f},{side*(.19f+i*.02f),.86f,.02f}},.035f,.018f);
-          for(auto center:{QVector3D(-.18f,.78f,-.15f),QVector3D(.20f,.48f,-.17f)}) mesh.flower(center,.065f);
-          for(int i=0;i<10;++i) {float a=2*pi*i/10;mesh.flower({.18f*std::cos(a),1.38f+.02f*std::sin(a),.16f*std::sin(a)},.055f);}
         }
+      } else if(part==4 && !king) {
+        for(auto center:{QVector3D(-.18f,.78f,-.15f),QVector3D(.20f,.48f,-.17f)}) mesh.flower(center,.065f);
+        for(int i=0;i<10;++i) {float a=2*pi*i/10;mesh.flower({.18f*std::cos(a),1.38f+.02f*std::sin(a),.16f*std::sin(a)},.055f);}
       } else if(part==4 && king) {
         for(float side:{-1.f,1.f}) {
           mesh.tube({{side*.14f,1.38f,.02f},{side*.28f,1.51f,.04f},{side*.34f,1.70f,.03f},{side*.31f,1.83f,0}},.036f,.012f);
@@ -401,14 +507,12 @@ void SculptGeometry::rebuild() {
       }
     }
   }
-  clear();
   if (mesh.vertices.empty()) mesh.triangle({0,0,0},{0,0,0},{0,0,0},{0,1,0},{0,1,0},{0,1,0});
-  setVertexData(QByteArray(reinterpret_cast<const char *>(mesh.vertices.data()),int(mesh.vertices.size()*sizeof(Vertex))));
-  setStride(sizeof(Vertex));
-  setPrimitiveType(QQuick3DGeometry::PrimitiveType::Triangles);
-  addAttribute(QQuick3DGeometry::Attribute::PositionSemantic,0,QQuick3DGeometry::Attribute::F32Type);
-  addAttribute(QQuick3DGeometry::Attribute::NormalSemantic,sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
-  addAttribute(QQuick3DGeometry::Attribute::TexCoord0Semantic,2*sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
-  setBounds({-.55f,0,-.55f},{.55f,1.9f,.55f});
-  update();
+  QVector3D minimum=mesh.vertices.front().position,maximum=minimum;
+  for (const auto &vertex : mesh.vertices) for(int axis=0;axis<3;++axis) {
+    minimum[axis]=std::min(minimum[axis],vertex.position[axis]);
+    maximum[axis]=std::max(maximum[axis],vertex.position[axis]);
+  }
+  auto stored=sculptures.emplace(key,Sculpture{QByteArray(reinterpret_cast<const char *>(mesh.vertices.data()),int(mesh.vertices.size()*sizeof(Vertex))),minimum,maximum});
+  upload(stored.first->second);
 }

@@ -19,6 +19,8 @@
 #include <QQuick3D>
 #include <algorithm>
 #include <functional>
+#include <cstring>
+#include <cmath>
 #include <limits>
 #include <QJsonArray>
 #include <QVector3D>
@@ -595,6 +597,32 @@ private slots:
         QVERIFY(next.legal().empty());
     }
 
+    void sculptedSurfacesFaceTheirNormals() {
+        SculptGeometry geometry;
+        for(int design=0;design<4;++design) for(int kind=1;kind<=6;++kind) for(int part=0;part<6;++part) {
+            geometry.setDesign(design); geometry.setKind(kind); geometry.setPart(part);
+            const auto data=geometry.vertexData();
+            const int stride=geometry.stride();
+            QVERIFY(stride>=int(6*sizeof(float)));
+            for(int offset=0;offset+3*stride<=data.size();offset+=3*stride) {
+                QVector3D positions[3],normals[3];
+                for(int vertex=0;vertex<3;++vertex) {
+                    float values[6]; std::memcpy(values,data.constData()+offset+vertex*stride,sizeof(values));
+                    for(float value:values) QVERIFY(std::isfinite(value));
+                    positions[vertex]={values[0],values[1],values[2]};
+                    normals[vertex]={values[3],values[4],values[5]};
+                    for(int axis=0;axis<3;++axis) {
+                        QVERIFY(positions[vertex][axis]>=geometry.boundsMin()[axis]-.00001f);
+                        QVERIFY(positions[vertex][axis]<=geometry.boundsMax()[axis]+.00001f);
+                    }
+                }
+                const auto face=QVector3D::crossProduct(positions[1]-positions[0],positions[2]-positions[0]);
+                QVERIFY(QVector3D::dotProduct(face,normals[0]+normals[1]+normals[2])>=-.000001f);
+                if(face.lengthSquared()>1e-12f) for(const auto &normal:normals) QVERIFY(normal.lengthSquared()>.9f);
+            }
+        }
+    }
+
     void windowLoadsAndAnswersTheKeyboard() {
         QTemporaryDir dir;
         Translator translator(dir.path() + "/language");
@@ -691,10 +719,15 @@ private slots:
             QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,location.toPoint());
             return true;
         };
-        QVERIFY(clickSquare(12));
-        QCOMPARE(backend.selected(),12);
-        QVERIFY(clickSquare(28));
-        QCOMPARE(backend.moves(),QStringList{"e4"});
+        for (int set=0;set<4;++set) {
+            backend.newGame(false,0);
+            backend.setPieceSet(set);
+            QTest::qWait(150);
+            QVERIFY(clickSquare(12));
+            QCOMPARE(backend.selected(),12);
+            QVERIFY(clickSquare(28));
+            QCOMPARE(backend.moves(),QStringList{"e4"});
+        }
 
         for (int promotion : {5,4,3,2}) {
             backend.newGame(false,0);

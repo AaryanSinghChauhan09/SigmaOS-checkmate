@@ -15,13 +15,13 @@ Node {
   property bool ready: false
   property color bodyColor: design === 0 ? (record.white ? "#e2d8c2" : "#242a32")
                             : design === 1 ? (record.white ? "#eed8aa" : "#59321b")
-                            : design === 2 ? (record.white ? "#decaa1" : "#985026")
+                            : design === 2 ? (record.white ? "#cdb78c" : "#8b4927")
                             : (record.white ? "#f38289" : "#935699")
   property color trimColor: design === 0 ? "#b99050"
                             : design === 1 ? "#c89b51" : design === 2 ? "#69723a" : "#eabe58"
   property color secondaryColor: design === 0 ? (record.white ? "#52cdd0" : "#ffb84d")
                                  : design === 1 ? (record.white ? "#c8ac7e" : "#362115")
-                                 : design === 2 ? (record.white ? "#eee0bc" : "#cfab76")
+                                 : design === 2 ? (record.kind === 1 || record.kind === 4 ? "#ae7e4b" : record.kind === 5 ? "#805027" : "#e6d4aa")
                                  : (record.white ? "#b94f72" : "#693b85")
   x: record.square % 8 - 3.5
   z: 3.5 - Math.floor(record.square / 8)
@@ -73,7 +73,7 @@ Node {
     materials: PrincipledMaterial {
       baseColorMap: Texture { textureData: SurfaceTexture { style: piece.design === 1 ? (piece.record.white ? 5 : 1) : piece.design === 2 ? 7 : piece.design } tilingModeVertical: Texture.Repeat }
       baseColor: piece.bodyColor
-      metalness: piece.design === 0 ? .65 : 0
+      metalness: piece.design === 0 ? .4 : 0
       roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .52
       specularAmount: .5
       clearcoatAmount: piece.design === 3 ? .9 : .12
@@ -106,7 +106,7 @@ Node {
       pickable: piece.record.alive
       geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 3 + index }
       materials: PrincipledMaterial {
-        baseColor: index === 0 ? piece.secondaryColor : index === 1 ? "#ac793e" : (piece.record.white ? "#efd5ac" : "#dbad79")
+        baseColor: index === 0 ? piece.secondaryColor : index === 1 ? (piece.record.kind === 5 ? "#f5e2bc" : "#ac793e") : (piece.record.white ? "#efd5ac" : "#dbad79")
         metalness: piece.design === 0 ? .25 : 0
         roughness: piece.design === 0 ? .18 : piece.design === 3 ? .20 : .55
         clearcoatAmount: piece.design === 3 ? .7 : 0

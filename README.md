@@ -4,6 +4,8 @@
 
 A native 3D chess game for Omarchy, built with C++ and Qt Quick 3D. Play against a friend on the same device or against the built-in computer, with four original sculptural piece sets: Orbital Orders, Midnight Atelier, Moss & Myth, and Candy Kingdom.
 
+The sets have individually sculpted pieces: swept metal panels, orbital rings and a crescent queen; carved wood and ivory horses; woodland foxes, owls, acorn sprites and antlered royalty; and glossy candy pieces with curled manes and gold crowns.
+
 Pieces glide into place, knights hop, captures shrink away, and check gets a brief pulse. Reduced motion is available in Settings. The interface follows Omarchy's theme and language; the board's materials follow the selected set.
 
 ## Play
