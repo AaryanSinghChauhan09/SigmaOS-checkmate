@@ -13,8 +13,8 @@ Item {
   property int cursorSquare: 12
   property bool keyboardMode: false
   property real checkGlow: .22
-  property var lightSquares: ["#929a9f", "#dec9a2", "#d7d5b7", "#f1ded5"]
-  property var darkSquares: ["#394652", "#654333", "#65775d", "#a78eb3"]
+  property var lightSquares: ["#7a7c7e", "#e2caa1", "#c7c0a0", "#f6d6bc"]
+  property var darkSquares: ["#252c33", "#54311e", "#65704c", "#99708e"]
   property var frames: ["#28343f", "#432b22", "#5b4934", "#e8c6be"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
   property bool sceneReady: false
@@ -77,7 +77,7 @@ Item {
     environment: SceneEnvironment {
       backgroundMode: SceneEnvironment.Transparent
       lightProbe: Texture { textureData: SurfaceTexture { style: 4 } }
-      probeExposure: .65
+      probeExposure: .75
       antialiasingMode: SceneEnvironment.MSAA
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
@@ -95,15 +95,15 @@ Item {
     DirectionalLight {
       eulerRotation: Qt.vector3d(-45,-35,0)
       color: "#ffebd2"
-      brightness: 1.6
+      brightness: 1.05
       castsShadow: true
       shadowMapQuality: Light.ShadowMapQualityHigh
-      shadowFactor: 55
+      shadowFactor: 80
       shadowBias: .015
       shadowMapFar: 40
     }
-    DirectionalLight { eulerRotation: Qt.vector3d(-30,140,0); color: "#c2ddf4"; brightness: .85 }
-    DirectionalLight { eulerRotation: Qt.vector3d(-70,0,0); color: "#ffffff"; brightness: .45 }
+    DirectionalLight { eulerRotation: Qt.vector3d(-30,140,0); color: "#c2ddf4"; brightness: .35 }
+    DirectionalLight { eulerRotation: Qt.vector3d(-70,0,0); color: "#ffffff"; brightness: .18 }
     Model {
       source: "#Cube"
       y: -.27
@@ -138,7 +138,7 @@ Item {
         y: .04
         scale: Qt.vector3d(.00996,.001,.00996)
         materials: PrincipledMaterial {
-          baseColorMap: surfaceMap
+          baseColorMap: Texture { textureData: SurfaceTexture { style: board.design === 1 && (Math.floor(tile.index / 8) + tile.index % 8) % 2 === 1 ? 5 : board.design } }
           baseColor: tile.marked ? board.accents[board.design] : (Math.floor(index / 8) + index % 8) % 2 === 1 ? board.lightSquares[board.design] : board.darkSquares[board.design]
           roughness: board.design === 3 ? .3 : .55
           metalness: board.design === 0 ? .15 : 0
