@@ -8,23 +8,29 @@ Item {
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
   property real manualAzimuth: 0
   property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
-  property real elevation: -44
-  property real distance: 13.2
+  // Moss & Myth figures turn with the seat as the camera does, so their faces stay toward whoever is playing.
+  property real seat: seatAngle()
+  // The carved faces read best from a lower seat; the home view follows the set until the player orbits or zooms.
+  property real elevation: homeElevation()
+  property real distance: homeDistance()
   property int cursorSquare: 12
   property bool keyboardMode: false
   property real checkGlow: .22
-  property var lightSquares: ["#929a9f", "#dec9a2", "#d7d5b7", "#f1ded5"]
-  property var darkSquares: ["#394652", "#654333", "#65775d", "#a78eb3"]
+  property var lightSquares: ["#7a7c7e", "#e2caa1", "#c7c0a0", "#f6d6bc"]
+  property var darkSquares: ["#252c33", "#54311e", "#65704c", "#99708e"]
   property var frames: ["#28343f", "#432b22", "#5b4934", "#e8c6be"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
   property bool sceneReady: false
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
+  function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
+  function homeElevation() { return design === 2 ? -46 : -52 }
+  function homeDistance() { return design === 2 ? 12.9 : 13.2 }
   function resetCamera() {
     manualAzimuth = 0
-    elevation = -44
-    distance = 13.2
+    elevation = Qt.binding(function() { return board.homeElevation() })
+    distance = Qt.binding(function() { return board.homeDistance() })
   }
   function keyboardSelect() { keyboardMode = true; backend.selectSquare(cursorSquare) }
   function navigate(dx, dy) {
@@ -37,9 +43,13 @@ Item {
     cursorSquare = y * 8 + x
   }
   Behavior on azimuth { id: rotationBehavior; enabled: board.motion && !orbit.dragging; NumberAnimation { id: cameraTurn; duration: 650; easing.type: Easing.InOutCubic } }
+  Behavior on seat { id: seatBehavior; enabled: board.motion; NumberAnimation { id: seatTurn; duration: 650; easing.type: Easing.InOutCubic } }
   onMotionChanged: {
     if (!motion) {
       rotationBehavior.enabled = false
+      seatBehavior.enabled = false
+      seat = Qt.binding(function() { return board.seatAngle() })
+      seatBehavior.enabled = Qt.binding(function() { return board.motion })
       checkPulse.stop(); checkGlow = .22
       azimuth = Qt.binding(function() {
         return (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + board.manualAzimuth
@@ -77,14 +87,10 @@ Item {
     environment: SceneEnvironment {
       backgroundMode: SceneEnvironment.Transparent
       lightProbe: Texture { textureData: SurfaceTexture { style: 4 } }
-      probeExposure: .65
+      probeExposure: .75
       antialiasingMode: SceneEnvironment.MSAA
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
-      aoEnabled: true
-      aoStrength: 35
-      aoDistance: .8
-      aoSoftness: 50
     }
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
     Node {
@@ -95,15 +101,15 @@ Item {
     DirectionalLight {
       eulerRotation: Qt.vector3d(-45,-35,0)
       color: "#ffebd2"
-      brightness: 1.6
+      brightness: 1.05
       castsShadow: true
       shadowMapQuality: Light.ShadowMapQualityHigh
-      shadowFactor: 55
+      shadowFactor: 80
       shadowBias: .015
       shadowMapFar: 40
     }
-    DirectionalLight { eulerRotation: Qt.vector3d(-30,140,0); color: "#c2ddf4"; brightness: .85 }
-    DirectionalLight { eulerRotation: Qt.vector3d(-70,0,0); color: "#ffffff"; brightness: .45 }
+    DirectionalLight { eulerRotation: Qt.vector3d(-30,140,0); color: "#c2ddf4"; brightness: .35 }
+    DirectionalLight { eulerRotation: Qt.vector3d(-70,0,0); color: "#ffffff"; brightness: .18 }
     Model {
       source: "#Cube"
       y: -.27
@@ -138,7 +144,7 @@ Item {
         y: .04
         scale: Qt.vector3d(.00996,.001,.00996)
         materials: PrincipledMaterial {
-          baseColorMap: surfaceMap
+          baseColorMap: Texture { textureData: SurfaceTexture { style: board.design === 1 && (Math.floor(tile.index / 8) + tile.index % 8) % 2 === 1 ? 5 : board.design } }
           baseColor: tile.marked ? board.accents[board.design] : (Math.floor(index / 8) + index % 8) % 2 === 1 ? board.lightSquares[board.design] : board.darkSquares[board.design]
           roughness: board.design === 3 ? .3 : .55
           metalness: board.design === 0 ? .15 : 0
@@ -159,6 +165,7 @@ Item {
         pieceId: index
         record: backend.pieces[index]
         design: board.design
+        seat: board.seat
         motion: board.motion
         selected: backend.selected === record.square && record.alive
       }

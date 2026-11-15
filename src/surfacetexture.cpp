@@ -31,8 +31,10 @@ void SurfaceTexture::rebuild() {
       float noise=std::sin(x*.73f+y*1.37f)*std::sin(x*2.27f-y*.37f);
       float wave=std::sin(x*.17f+3*std::sin(y*.018f)+.7f*std::sin(y*.051f));
       float value=.94f;
-      if (m_style==1) value=.94f+.028f*wave+.012f*std::sin(x*.85f+wave*3)+noise*.006f;
+      if (m_style==1) value=.87f+.065f*wave+.035f*std::sin(x*.85f+wave*3)+noise*.015f;
       else if (m_style==2) value=.95f+.018f*std::sin(x*.04f+2*std::sin(y*.033f))+noise*.006f;
+      else if (m_style==5) value=.94f-.06f*std::pow(.5f+.5f*std::sin(x*.035f+y*.025f+2*wave),12)+noise*.004f;
+      else if (m_style==7) value=.9f+.04f*std::sin(x*.35f+std::sin(y*.023f))+noise*.012f;
       else if (m_style==0) value=.93f+noise*.02f;
       auto shade=char(std::clamp(int(value*255),0,255));
       const int offset=(y*width+x)*4;
