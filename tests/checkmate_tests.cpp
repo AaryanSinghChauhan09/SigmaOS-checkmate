@@ -662,6 +662,49 @@ private slots:
         }
     }
 
+    void castSetsAreClosedSolidsWithARoyalSilhouette() {
+        SculptGeometry geometry;
+        for(int design:{0,1,3}) {
+            float height[7]={};
+            for(int kind=1;kind<=6;++kind) for(int part=0;part<4;++part) {
+                geometry.setDesign(design); geometry.setKind(kind); geometry.setPart(part);
+                const auto data=geometry.vertexData(),indices=geometry.indexData();
+                const int stride=geometry.stride();
+                QCOMPARE(stride,int(12*sizeof(float)));
+                const qsizetype corners=indices.size()/qsizetype(sizeof(quint32));
+                // Every piece has a sculpted body; metalwork, inlay and a second colour only where the design calls for them.
+                if(part==0) QVERIFY(corners>6000);
+                if(corners==0) continue;
+                QVERIFY(corners%3==0);
+                // Each part is cast as closed solids: every edge is shared by an even number of triangles.
+                std::map<std::pair<quint32,quint32>,int> edges;
+                for(qsizetype first=0;first<corners;first+=3) {
+                    quint32 corner[3]; std::memcpy(corner,indices.constData()+first*qsizetype(sizeof(quint32)),sizeof(corner));
+                    for(int side=0;side<3;++side) {
+                        const quint32 from=corner[side],to=corner[(side+1)%3];
+                        QVERIFY((qsizetype(from)+1)*stride<=data.size());
+                        ++edges[{std::min(from,to),std::max(from,to)}];
+                    }
+                }
+                for(const auto &edge:edges) QVERIFY(edge.second%2==0);
+                // Recesses are shaded, never blacked out or brightened.
+                for(qsizetype offset=0;offset+stride<=data.size();offset+=stride) {
+                    float shade[4]; std::memcpy(shade,data.constData()+offset+8*qsizetype(sizeof(float)),sizeof(shade));
+                    for(float channel:shade) QVERIFY(channel>=.3f && channel<=1);
+                }
+                // A piece stands on its own square, low enough to see and click the rank behind it.
+                QVERIFY(geometry.boundsMin().y()>-.05f && geometry.boundsMax().y()<1.9f);
+                QVERIFY(geometry.boundsMin().x()>-.5f && geometry.boundsMax().x()<.5f);
+                QVERIFY(geometry.boundsMin().z()>-.5f && geometry.boundsMax().z()<.5f);
+                height[kind]=std::max(height[kind],geometry.boundsMax().y());
+            }
+            // Rank reads from the silhouette: pawns lowest, the queen above her officers, the king above all.
+            for(int kind=2;kind<=6;++kind) QVERIFY(height[1]<height[kind]);
+            for(int kind=2;kind<=4;++kind) QVERIFY(height[kind]<height[5]);
+            QVERIFY(height[5]<height[6]);
+        }
+    }
+
     void windowLoadsAndAnswersTheKeyboard() {
         QTemporaryDir dir;
         Translator translator(dir.path() + "/language");

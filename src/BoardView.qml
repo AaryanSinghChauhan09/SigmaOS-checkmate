@@ -8,25 +8,25 @@ Item {
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
   property real manualAzimuth: 0
   property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
-  // Moss & Myth figures turn with the seat as the camera does, so their faces stay toward whoever is playing.
+  // The figures turn with the seat as the camera does, so their faces stay toward whoever is playing.
   property real seat: seatAngle()
-  // The carved faces read best from a lower seat; the home view follows the set until the player orbits or zooms.
+  // Sculpted figures read best from a lower seat, the carved faces lowest; the home view follows the set until the player orbits or zooms.
   property real elevation: homeElevation()
   property real distance: homeDistance()
   property int cursorSquare: 12
   property bool keyboardMode: false
   property real checkGlow: .22
-  property var lightSquares: ["#7a7c7e", "#e2caa1", "#c7c0a0", "#f6d6bc"]
-  property var darkSquares: ["#252c33", "#54311e", "#65704c", "#99708e"]
-  property var frames: ["#28343f", "#432b22", "#5b4934", "#e8c6be"]
+  property var lightSquares: ["#7a7c7e", "#e2caa1", "#c7c0a0", "#f6e2cb"]
+  property var darkSquares: ["#252c33", "#54311e", "#65704c", "#a07a9b"]
+  property var frames: ["#28343f", "#432b22", "#5b4934", "#f0dccb"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
   property bool sceneReady: false
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
   function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
-  function homeElevation() { return design === 2 ? -46 : -52 }
-  function homeDistance() { return design === 2 ? 12.9 : 13.2 }
+  function homeElevation() { return design === 2 ? -46 : -49 }
+  function homeDistance() { return design === 2 ? 12.9 : 13 }
   function resetCamera() {
     manualAzimuth = 0
     elevation = Qt.binding(function() { return board.homeElevation() })

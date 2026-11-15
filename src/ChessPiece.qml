@@ -28,9 +28,10 @@ Node {
   z: 3.5 - Math.floor(record.square / 8)
   y: .12 + lift + (selected ? .1 : 0)
   scale: Qt.vector3d(presence, presence, presence)
-  // The woodland folk face whoever is seated at the board, the foxes turned in toward its middle.
-  eulerRotation.y: woodland ? 180 + seat + (record.kind === 2 ? (pieceId % 2 ? 32 : -32) * Math.cos(seat * Math.PI / 180) : 0)
-                   : record.kind === 2 ? (record.white ? 90 : -90) : (record.white ? 180 : 0)
+  // Every figure faces whoever is seated at the board. Knights turn in toward its middle: the foxes
+  // a little, the horses far enough to show their profile.
+  property real knightTurn: woodland ? 32 : 58
+  eulerRotation.y: 180 + seat + (record.kind === 2 ? (pieceId % 2 ? knightTurn : -knightTurn) * Math.cos(seat * Math.PI / 180) : 0)
   Behavior on x { id: xBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideX; duration: 360; easing.type: Easing.InOutCubic } }
   Behavior on z { id: zBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideZ; duration: 360; easing.type: Easing.InOutCubic } }
   Behavior on y { id: yBehavior; enabled: piece.ready && piece.motion && !hop.running; NumberAnimation { id: selectionLift; duration: 180; easing.type: Easing.OutCubic } }
@@ -74,18 +75,20 @@ Node {
     pickable: piece.record.alive
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; tone: piece.record.white ? 0 : 1; part: 0 }
     Texture { id: surface; textureData: SurfaceTexture { style: piece.design === 1 ? (piece.record.white ? 5 : 1) : piece.design } tilingModeVertical: Texture.Repeat }
+    // Ceramic or gunmetal, polished wood, painted carving, boiled sugar.
     materials: PrincipledMaterial {
       baseColorMap: piece.woodland ? null : surface
       baseColor: piece.bodyColor
       vertexColorsEnabled: true
-      metalness: piece.design === 0 ? .4 : 0
-      roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .7
+      metalness: piece.design === 0 ? (piece.record.white ? .2 : .55) : 0
+      roughness: piece.design === 3 ? .14 : piece.design === 1 ? .34 : piece.design === 0 ? .3 : .7
       specularAmount: piece.woodland ? .3 : .5
-      clearcoatAmount: piece.design === 3 ? .9 : piece.woodland ? 0 : .12
-      clearcoatRoughnessAmount: .2
+      clearcoatAmount: piece.design === 3 ? 1 : piece.design === 1 ? .35 : piece.woodland ? 0 : .2
+      clearcoatRoughnessAmount: piece.design === 1 ? .14 : .2
       cullMode: Material.NoCulling
     }
   }
+  // The cast sets add metalwork, dark inlay and a second colour, each a solid of its own.
   Model {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
@@ -93,8 +96,9 @@ Node {
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 1 }
     materials: PrincipledMaterial {
       baseColor: piece.trimColor
-      metalness: .8
-      roughness: .25
+      vertexColorsEnabled: true
+      metalness: .9
+      roughness: piece.design === 3 ? .2 : .26
       cullMode: Material.NoCulling
     }
   }
@@ -103,24 +107,28 @@ Node {
     pickable: piece.record.alive
     visible: !piece.woodland
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 2 }
-    materials: PrincipledMaterial { baseColor: "#1b1a20"; roughness: .25; cullMode: Material.NoCulling }
+    materials: PrincipledMaterial {
+      baseColor: piece.design === 3 ? (piece.record.white ? "#5a2238" : "#2c1636") : piece.design === 0 ? "#10151c" : "#1b1a20"
+      vertexColorsEnabled: true
+      roughness: piece.design === 0 ? .1 : .25
+      clearcoatAmount: piece.design === 0 ? .6 : 0
+      cullMode: Material.NoCulling
+    }
   }
-  Repeater3D {
-    model: 3
-    Model {
-      required property int index
-      property int boardSquare: piece.record.square
-      pickable: piece.record.alive
-      visible: !piece.woodland
-      geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 3 + index }
-      materials: PrincipledMaterial {
-        baseColor: index === 0 ? piece.secondaryColor : index === 1 ? (piece.record.kind === 5 ? "#f5e2bc" : "#ac793e") : (piece.record.white ? "#efd5ac" : "#dbad79")
-        metalness: piece.design === 0 ? .25 : 0
-        roughness: piece.design === 0 ? .18 : piece.design === 3 ? .20 : .55
-        clearcoatAmount: piece.design === 3 ? .7 : 0
-        emissiveFactor: piece.design === 0 ? (piece.record.white ? Qt.vector3d(.15,.6,.65) : Qt.vector3d(.75,.3,.04)) : Qt.vector3d(0,0,0)
-        cullMode: Material.NoCulling
-      }
+  Model {
+    property int boardSquare: piece.record.square
+    pickable: piece.record.alive
+    visible: !piece.woodland
+    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 3 }
+    materials: PrincipledMaterial {
+      baseColor: piece.secondaryColor
+      vertexColorsEnabled: true
+      roughness: piece.design === 3 ? .16 : .2
+      clearcoatAmount: piece.design === 3 ? 1 : 0
+      clearcoatRoughnessAmount: .2
+      // Orbital lights burn in their own colour whatever the room is doing.
+      emissiveFactor: piece.design === 0 ? (piece.record.white ? Qt.vector3d(.22,.95,1.05) : Qt.vector3d(1.25,.55,.08)) : Qt.vector3d(0,0,0)
+      cullMode: Material.NoCulling
     }
   }
 }
