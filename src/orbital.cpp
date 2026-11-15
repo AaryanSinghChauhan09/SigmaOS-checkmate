@@ -1,7 +1,7 @@
 #include "figures.h"
 
 // Orbital Orders is a court among the stars in miniature: pale ceramic or gunmetal hulls on
-// ringed decks, gold instruments for the royals, and small lights behind dark glass.
+// ringed decks, gold instruments and edging for the officers, and small lights behind dark glass.
 namespace {
 using namespace Clay;
 using Figures::Field;
@@ -10,14 +10,24 @@ using Figures::Mould;
 // Every piece stands on a deck, scaled to its rank: a plate under a low cone, a gold ring let into the step.
 const Lathe deck({{0,.04f},{.31f,.05f},{.3f,.085f},{.25f,.118f},{.2f,.15f},{0,.15f}});
 const float rank[]={0,.82f,.95f,.92f,.98f,1,1};
-// The steed's head is laid out along its own axis: across, above the nose line, and down it from the poll.
-const Frame skull({0,1.0f,-.04f},{0,.832f,-.555f},{0,-.555f,-.832f});
 
 float base(P p,float scale) {
   const P q=p*(1/scale);
   return smin(disc(q,.025f,.35f,.045f,.014f),deck.distance(hypot2(q.x,q.z),q.y),.006f)*scale;
 }
 float ring(P p,float height,float radius,float tube) { return hoop({p.x,p.y-height,p.z},radius,tube); }
+
+// A plate cut to an outline seen from the side, thickest along its middle and bevelled flat to a fine edge.
+// The outline is traced as (depth+.6, height); a knot given twice is a sharp corner.
+struct Plate {
+  Lathe outline;
+  float edge,bevel,thick;
+  float rim(P p) const { return outline.distance(p.z+.6f,p.y); }
+  float distance(P p) const {
+    const float d=rim(p);
+    return smax(d,std::abs(p.x)-std::min(thick,edge+bevel*std::max(-d,0.f)),.004f)*.75f;
+  }
+};
 
 // The sentinel: a beacon dome on a flared collar, parted all the way round by a slot of dark glass.
 Field sentinel() {
@@ -29,39 +39,49 @@ Field sentinel() {
   };
 }
 
-// The comet steed: a blade of a neck over a breastplate, a long tapering head, and ears swept back like fins.
+// The comet steed is all blades: a sail of a neck swelling to a breastplate, a long wedge of a head
+// with a hard brow, and two fins swept back from the crown.
+const Plate sail{Lathe({{.39f,.1f},{.39f,.1f},{.35f,.36f},{.4f,.56f},{.5f,.74f},{.55f,.86f},{.55f,.86f},{.67f,.97f},{.67f,.97f},
+                        {.79f,.8f},{.87f,.5f},{.86f,.3f},{.83f,.1f},{.83f,.1f},{.39f,.1f},{.39f,.1f}}),.025f,.8f,.125f};
+const Plate helm{Lathe({{.18f,.72f},{.18f,.72f},{.44f,.93f},{.44f,.93f},{.58f,1.06f},{.58f,1.06f},{.73f,.97f},{.73f,.97f},
+                        {.65f,.8f},{.65f,.8f},{.4f,.71f},{.4f,.71f},{.18f,.72f},{.18f,.72f}}),.018f,.75f,.085f};
+const Plate fin{Lathe({{.5f,.97f},{.5f,.97f},{.9f,1.26f},{.9f,1.26f},{.71f,.9f},{.71f,.9f},{.5f,.97f},{.5f,.97f}}),.014f,.6f,.032f};
 float steed(P p) {
-  const P m{std::abs(p.x),p.y,p.z};
-  float body=horn(narrow(p,.62f),{0,.2f,.03f},{0,.62f,.07f},.215f,.13f)*.62f;
-  body=smin(body,horn(narrow(p,.6f),{0,.62f,.07f},{0,.96f,-.02f},.13f,.105f)*.6f,.04f);
-  body=smin(body,egg(p,{0,.36f,-.1f},{.13f,.2f,.14f}),.04f);
-  float head=horn(narrow(p,.62f),{0,1.0f,-.04f},{0,.82f,-.31f},.108f,.04f)*.62f;
-  head=smin(head,egg(p,{0,.9f,-.09f},{.07f,.085f,.11f}),.03f);
-  head=smin(head,horn(m,{.045f,1.04f,0},{.075f,1.3f,.2f},.04f,.008f),.02f);
-  return smin(base(p,.95f),smin(body,head,.03f),.02f);
+  // Each plate is only measured near where it stands.
+  float d=p.y<1.1f ? sail.distance(p) : 1e9f;
+  if(p.y>.58f) d=smin(d,helm.distance(p),.012f);
+  // The fins lean apart as they rise.
+  if(p.y>.78f && p.z>-.22f) d=std::min(d,fin.distance({std::abs(p.x)-.048f-.2f*(p.y-.95f),p.y,p.z}));
+  return smin(base(p,.95f),d,.015f);
 }
-
-// Its mane is one gold crescent standing off the back of the neck.
-float crest(P p) {
-  const float fin=std::max(hypot2(p.y-.66f,p.z+.07f)-.36f,.02f-p.z);
-  return smax(fin,std::abs(p.x)-.012f-.3f*std::min(std::max(-fin,0.f),.05f),.006f)*.8f;
+// Gold edging follows the whole silhouette of sail and helm.
+float edging(P p) {
+  if(std::abs(p.x)>.12f) return std::abs(p.x)-.016f;
+  const float rim=std::min(sail.rim(p),helm.rim(p))-.013f;
+  return std::max(std::max(rim,std::abs(p.x)-.016f),std::max(.2f-p.y,-rim-.05f));
+}
+// A slit of light lies under each brow.
+Field visor() {
+  const float side=Figures::land(steed,{.5f,.925f,-.09f},{-1,0,0}).x;
+  const Frame brow({0,.925f,-.09f},{0,.763f,-.646f},{0,-.646f,-.763f});
+  return [=](P p) { const P q=brow.local(p); return egg({std::abs(q.x),q.y,q.z},{side,0,0},{.016f,.016f,.07f}); };
 }
 
 // The halo spire: a slender hull that carries a ring and its light.
 Field spire() {
-  const Lathe hull({{0,.11f},{.19f,.12f},{.172f,.2f},{.14f,.34f},{.108f,.52f},{.082f,.7f},{.066f,.86f},{.06f,.96f},{.072f,1.0f},{0,1.01f}});
-  return [=](P p) { return smin(smin(base(p,.92f),hull.distance(hypot2(p.x,p.z),p.y),.008f),disc(p,.9f,.085f,.014f,.008f),.004f); };
+  const Lathe hull({{0,.11f},{.19f,.12f},{.172f,.19f},{.14f,.32f},{.108f,.48f},{.084f,.64f},{.068f,.78f},{.062f,.87f},{.074f,.91f},{0,.92f}});
+  return [=](P p) { return smin(smin(base(p,.92f),hull.distance(hypot2(p.x,p.z),p.y),.008f),disc(p,.82f,.088f,.014f,.008f),.004f); };
 }
 float halo(P p) {
-  float d=std::min(hoop({p.x,p.z,p.y-1.2f},.165f,.021f),horn(p,{0,1.03f,0},{0,1.38f,0},.011f,.011f));
-  d=smin(d,horn(p,{0,.99f,0},{0,1.045f,0},.05f,.036f),.008f);
-  return smin(d,ball(p,{0,1.405f,0},.03f),.006f);
+  float d=std::min(hoop({p.x,p.z,p.y-1.1f},.15f,.021f),horn(p,{0,.94f,0},{0,1.27f,0},.011f,.011f));
+  d=smin(d,horn(p,{0,.9f,0},{0,.955f,0},.05f,.036f),.008f);
+  return smin(d,ball(p,{0,1.295f,0},.03f),.006f);
 }
 // A seam of light runs down the front of the hull.
 Field seam() {
   const Field hull=spire();
   std::vector<P> line;
-  for(int i=0;i<8;++i) line.push_back(Figures::land(hull,{0,.25f+.085f*i,-.6f},{0,0,1}));
+  for(int i=0;i<8;++i) line.push_back(Figures::land(hull,{0,.25f+.074f*i,-.6f},{0,0,1}));
   return [=](P p) { return strand(p,line,.011f,.011f); };
 }
 
@@ -77,42 +97,62 @@ Field bastion() {
   };
 }
 
-// The crescent regent: a gown of panels that overlap as they wind upward, under a standing moon.
-Field regent() {
-  const Lathe gown({{0,.12f},{.225f,.13f},{.215f,.2f},{.19f,.34f},{.16f,.52f},{.13f,.72f},{.11f,.88f},{.105f,.98f},{.125f,1.04f},{.14f,1.075f},{.12f,1.09f},{0,1.09f}});
-  return [=](P p) {
-    const float turn=5*std::atan2(p.z,p.x)/(2*pi)+1.1f*p.y, lap=turn-std::floor(turn)-.5f;
-    const float step=.03f*lap*smooth(.16f,.3f,p.y)*smooth(1.0f,.86f,p.y);
-    return smin(base(p,1),gown.distance(hypot2(p.x,p.z)+step,p.y),.008f);
-  };
+// The crescent regent: four broad panels overlap as they wind up her gown, and her shoulders
+// carry a moon as thick as the hull itself, lined with gold and cradling its light.
+const Lathe gown({{0,.12f},{.24f,.13f},{.235f,.22f},{.215f,.4f},{.185f,.6f},{.16f,.78f},{.152f,.86f},{.168f,.93f},{.195f,.97f},{.19f,1.0f},{.14f,1.02f},{0,1.03f}});
+const float wind=.9f;
+// How far the panels stand off one another, fading out at hem and shoulder.
+float lift(float height) { return .07f*smooth(.16f,.3f,height)*smooth(.97f,.87f,height); }
+float sickle(P p) { return std::max(hypot2(p.x-.02f,p.y-1.24f)-.24f,.2f-hypot2(p.x+.07f,p.y-1.29f)); }
+float regent(P p) {
+  const float turn=4*std::atan2(p.z,p.x)/(2*pi)+wind*p.y, lap=turn-std::floor(turn)-.5f;
+  // Each panel steps down onto the next, so the field is eased to stay an honest underestimate.
+  const float dress=gown.distance(hypot2(p.x,p.z)+lift(p.y)*lap,p.y)*.65f;
+  const float s=sickle(p), moon=smax(s,std::abs(p.z)-.02f-.5f*std::min(std::max(-s,0.f),.09f),.01f)*.8f;
+  return smin(base(p,1),smin(dress,moon,.02f),.008f);
 }
-// Her moon is thickest at its back and fine at the horns, and stands in a boss on her collar.
-float moon(P p) {
-  const float sickle=std::max(hypot2(p.x-.01f,p.y-1.345f)-.255f,.215f-hypot2(p.x+.075f,p.y-1.385f));
-  float d=smax(sickle,std::abs(p.z)-.014f-.42f*std::min(std::max(-sickle,0.f),.07f),.008f)*.8f;
-  d=smin(d,horn(p,{0,1.07f,0},{0,1.13f,0},.07f,.04f),.012f);
-  return std::min(d,ring(p,.99f,.107f,.014f));
+// Gold piping runs up the proud edge of every panel.
+float piping(P p) {
+  const P q=wedge(p,4,-wind*p.y*pi/2);
+  const float d=hypot2(q.x,gown.distance(-q.z-lift(p.y)*.5f+.004f,p.y))-.011f;
+  return std::max(d,std::max(p.y-.93f,.22f-p.y))*.7f;
+}
+// The moon's inner curve is lined with gold, and a gold ring closes her collar.
+float lining(P p) {
+  const float arc=std::max(std::abs(hypot2(p.x+.07f,p.y-1.29f)-.2f)-.013f,hypot2(p.x-.02f,p.y-1.24f)-.236f);
+  return std::min(std::max(arc,std::abs(p.z)-.03f),ring(p,.985f,.196f,.013f));
 }
 
-// The armillary sovereign: a pleated robe whose high collar opens in a vee, under the rings of an armillary.
-Field sovereign() {
-  const Lathe robe({{0,.12f},{.245f,.13f},{.24f,.22f},{.222f,.4f},{.2f,.6f},{.178f,.8f},{.16f,.95f},{.158f,1.02f},{.185f,1.09f},{.215f,1.14f},{.21f,1.165f},{.17f,1.16f},{.1f,1.13f},{0,1.12f}});
-  return [=](P p) {
-    const float pleat=.02f*(1-std::abs(std::sin(4*std::atan2(p.z,p.x))))*smooth(.18f,.32f,p.y)*smooth(.98f,.84f,p.y);
-    const float d=smax(robe.distance(hypot2(p.x,p.z)+pleat,p.y),-std::max(std::abs(p.x)-(p.y-.99f)*.5f,p.z+.06f)*.85f,.008f);
-    return smin(base(p,1),d,.008f);
-  };
+// The armillary sovereign: a pleated robe under a mantle with broad shoulders and a standing collar,
+// parted down the front, with the rings of an armillary nested in the collar.
+const Lathe robe({{0,.12f},{.25f,.13f},{.245f,.22f},{.228f,.4f},{.208f,.6f},{.195f,.8f},{.19f,.95f},{.17f,1.05f},{.12f,1.1f},{0,1.11f}});
+const Lathe mantle({{0,.52f},{.2f,.5f},{.258f,.5f},{.264f,.53f},{.25f,.7f},{.236f,.86f},{.242f,.95f},{.264f,1.02f},{.27f,1.06f},{.245f,1.09f},
+                    {.218f,1.13f},{.224f,1.17f},{.21f,1.185f},{.17f,1.17f},{.1f,1.13f},{0,1.12f}});
+// Where the mantle parts: negative inside an opening that widens toward the hem, and inside the vee of the collar.
+float parting(P p) {
+  const float a=(8+37*saturate((1.05f-p.y)/.55f))*pi/180;
+  return std::min(std::abs(p.x)*std::cos(a)+p.z*std::sin(a),std::max(std::abs(p.x)-(p.y-1.0f)*.5f,p.z+.05f));
+}
+float sovereign(P p) {
+  const float rho=hypot2(p.x,p.z);
+  const float pleat=.03f*(1-std::abs(std::cos(4*std::atan2(p.z,p.x))))*smooth(.18f,.3f,p.y)*smooth(1.0f,.9f,p.y);
+  const float cloak=smax(mantle.distance(rho,p.y),-parting(p)*.9f,.008f);
+  return smin(base(p,1),smin(robe.distance(rho+pleat,p.y)*.8f,cloak,.006f),.008f);
+}
+// Gold braid edges the parting and the hem.
+float braid(P p) {
+  const float skin=mantle.distance(hypot2(p.x,p.z),p.y);
+  const float lapel=std::max(std::max(std::abs(parting(p))-.014f,skin-.008f),std::max(-skin-.03f,.5f-p.y));
+  return std::min(lapel,std::max(ring(p,.515f,.258f,.015f),-parting(p)));
 }
 Field armillary() {
-  const P heart{0,1.44f,0};
+  const P heart{0,1.35f,0};
   const Frame meridian(heart,{0,0,1},{0,1,0}), ecliptic(heart,{.34f,.94f,0},{0,0,1}), orbit(heart,{.68f,.33f,.65f},{0,1,0});
   return [=](P p) {
-    float d=std::min(hoop(meridian.local(p),.215f,.013f),std::min(hoop(ecliptic.local(p),.198f,.013f),hoop(orbit.local(p),.181f,.013f)));
-    d=std::min(d,horn(p,{0,1.1f,0},{0,1.7f,0},.012f,.012f));
-    d=smin(d,horn(p,{0,1.11f,0},{0,1.2f,0},.05f,.02f),.01f);
-    d=std::min(d,ball(p,{0,1.715f,0},.03f));
-    // A torque rings the collar, broken where the vee opens.
-    return std::min(d,smax(ring(p,1.15f,.212f,.013f),-std::max(std::abs(p.x)-(p.y-.99f)*.5f-.012f,p.z+.06f),.004f));
+    float d=std::min(hoop(meridian.local(p),.19f,.015f),std::min(hoop(ecliptic.local(p),.174f,.015f),hoop(orbit.local(p),.158f,.015f)));
+    d=std::min(d,horn(p,{0,1.1f,0},{0,1.575f,0},.012f,.012f));
+    d=smin(d,horn(p,{0,1.11f,0},{0,1.19f,0},.05f,.02f),.01f);
+    return std::min(d,ball(p,{0,1.585f,0},.028f));
   };
 }
 }
@@ -120,18 +160,18 @@ Field armillary() {
 std::vector<Mould> Orbital::moulds(int kind,int part) {
   if(kind<1 || kind>6) return {};
   if(part==0) {
-    const Field hull=kind==1 ? sentinel() : kind==2 ? Field(steed) : kind==3 ? spire() : kind==4 ? bastion() : kind==5 ? regent() : sovereign();
-    return {{hull,kind<3 ? .015f : .017f,.5f}};
+    const Field hull=kind==1 ? sentinel() : kind==2 ? Field(steed) : kind==3 ? spire() : kind==4 ? bastion() : kind==5 ? Field(regent) : Field(sovereign);
+    return {{hull,kind==2 ? .013f : kind==1 ? .015f : .017f,.5f}};
   }
   if(part==1) {
     const float scale=rank[kind];
     std::vector<Mould> gold{{[=](P p) { return ring(p,.07f*scale,.322f*scale,.013f); },.007f,.3f}};
     if(kind==1) gold.push_back({+[](P p) { return ring(p,.405f,.148f,.016f); },.008f,.3f});
-    if(kind==2) gold.push_back({crest,.009f,.3f});
+    if(kind==2) gold.push_back({edging,.007f,.3f});
     if(kind==3) gold.push_back({halo,.007f,.3f});
     if(kind==4) gold.push_back({+[](P p) { return std::min(ring(p,.7f,.264f,.014f),ring(p,.41f,.186f,.012f)); },.007f,.3f});
-    if(kind==5) gold.push_back({moon,.0075f,.3f});
-    if(kind==6) gold.push_back({armillary(),.007f,.3f});
+    if(kind==5) { gold.push_back({lining,.007f,.3f}); gold.push_back({piping,.006f,.3f}); }
+    if(kind==6) { gold.push_back({braid,.007f,.3f}); gold.push_back({armillary(),.007f,.3f}); }
     return gold;
   }
   if(part==2) {
@@ -142,12 +182,12 @@ std::vector<Mould> Orbital::moulds(int kind,int part) {
   if(part==3) {
     // Lights: a lens, eye slits, the orbs the instruments hold, and what shows through ports and seams.
     if(kind==1) return {{+[](P p) { return egg(p,{0,.6f,-.186f},{.052f,.034f,.03f}); },.006f,0}};
-    if(kind==2) return {{+[](P p) { const P q=skull.local(p); return egg({std::abs(q.x),q.y,q.z},{.047f,.03f,.1f},{.013f,.014f,.055f}); },.005f,0}};
-    if(kind==3) return {{+[](P p) { return ball(p,{0,1.2f,0},.068f); },.01f,0},{seam(),.005f,0}};
+    if(kind==2) return {{visor(),.005f,0}};
+    if(kind==3) return {{+[](P p) { return ball(p,{0,1.1f,0},.066f); },.01f,0},{seam(),.005f,0}};
     if(kind==4) return {{+[](P p) { return disc(p,.81f,.247f,.046f,.004f); },.01f,0}};
-    if(kind==5) return {{+[](P p) { return ball(p,{-.075f,1.245f,0},.085f); },.012f,0}};
-    const P gem=Figures::land(sovereign(),{0,.9f,-.6f},{0,0,1});
-    return {{+[](P p) { return ball(p,{0,1.44f,0},.06f); },.01f,0},{[=](P p) { return egg(p,gem,{.036f,.048f,.02f}); },.006f,0}};
+    if(kind==5) return {{+[](P p) { return ball(p,{-.07f,1.165f,0},.078f); },.012f,0}};
+    const P gem=Figures::land(sovereign,{0,.86f,-.6f},{0,0,1});
+    return {{+[](P p) { return ball(p,{0,1.35f,0},.055f); },.01f,0},{[=](P p) { return egg(p,gem,{.036f,.048f,.02f}); },.006f,0}};
   }
   return {};
 }

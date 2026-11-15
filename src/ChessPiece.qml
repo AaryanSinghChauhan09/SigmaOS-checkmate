@@ -16,14 +16,19 @@ Node {
   property bool ready: false
   // Moss & Myth is one carved figure per piece, painted in its mesh rather than by part.
   property bool woodland: design === 2
-  property color bodyColor: design === 0 ? (record.white ? "#e2d8c2" : "#242a32")
+  property color bodyColor: design === 0 ? (record.white ? "#e2d8c2" : "#343a44")
                             : design === 1 ? (record.white ? "#eed8aa" : "#59321b")
                             : design === 2 ? "#ffffff"
-                            : (record.white ? "#f38289" : "#935699")
-  property color trimColor: design === 0 ? "#b99050" : design === 1 ? "#c89b51" : "#eabe58"
+                            : (record.white ? "#f7949b" : "#9a5fa6")
+  property color trimColor: design === 0 ? "#b99050" : design === 1 ? "#c89b51" : "#f2c653"
   property color secondaryColor: design === 0 ? (record.white ? "#52cdd0" : "#ffb84d")
                                  : design === 1 ? (record.white ? "#c8ac7e" : "#362115")
-                                 : (record.white ? "#b94f72" : "#693b85")
+                                 : (record.white ? "#d25a82" : "#7b4a9c")
+  // Sugar passes light through itself, so candy never falls into dark shadow: each sweet glows faintly in its own colour.
+  property bool candy: design === 3
+  property vector3d sugarGlow: !candy ? Qt.vector3d(0,0,0) : record.white ? Qt.vector3d(.24,.085,.095) : Qt.vector3d(.105,.05,.125)
+  property vector3d secondGlow: design === 0 ? (record.white ? Qt.vector3d(.22,.95,1.05) : Qt.vector3d(1.25,.55,.08))
+                                : !candy ? Qt.vector3d(0,0,0) : record.white ? Qt.vector3d(.15,.03,.06) : Qt.vector3d(.06,.025,.1)
   x: record.square % 8 - 3.5
   z: 3.5 - Math.floor(record.square / 8)
   y: .12 + lift + (selected ? .1 : 0)
@@ -80,11 +85,13 @@ Node {
       baseColorMap: piece.woodland ? null : surface
       baseColor: piece.bodyColor
       vertexColorsEnabled: true
-      metalness: piece.design === 0 ? (piece.record.white ? .2 : .55) : 0
-      roughness: piece.design === 3 ? .14 : piece.design === 1 ? .34 : piece.design === 0 ? .3 : .7
+      metalness: piece.design === 0 ? (piece.record.white ? .2 : .5) : 0
+      roughness: piece.candy ? .24 : piece.design === 1 ? .34 : piece.design === 0 ? (piece.record.white ? .3 : .36) : .7
       specularAmount: piece.woodland ? .3 : .5
-      clearcoatAmount: piece.design === 3 ? 1 : piece.design === 1 ? .35 : piece.woodland ? 0 : .2
-      clearcoatRoughnessAmount: piece.design === 1 ? .14 : .2
+      // A full lacquer mirrors the dark of the room at every grazing edge, so the sweets wear only a light glaze.
+      clearcoatAmount: piece.woodland ? 0 : piece.design === 0 ? .2 : .35
+      clearcoatRoughnessAmount: piece.design === 1 ? .14 : piece.candy ? .08 : .2
+      emissiveFactor: piece.sugarGlow
       cullMode: Material.NoCulling
     }
   }
@@ -97,8 +104,10 @@ Node {
     materials: PrincipledMaterial {
       baseColor: piece.trimColor
       vertexColorsEnabled: true
-      metalness: .9
-      roughness: piece.design === 3 ? .2 : .26
+      // Gold leaf on a sweet is warmer and softer than cast metal.
+      metalness: piece.candy ? .6 : .9
+      roughness: piece.candy ? .3 : .26
+      emissiveFactor: piece.candy ? Qt.vector3d(.12,.08,.015) : Qt.vector3d(0,0,0)
       cullMode: Material.NoCulling
     }
   }
@@ -123,11 +132,11 @@ Node {
     materials: PrincipledMaterial {
       baseColor: piece.secondaryColor
       vertexColorsEnabled: true
-      roughness: piece.design === 3 ? .16 : .2
-      clearcoatAmount: piece.design === 3 ? 1 : 0
-      clearcoatRoughnessAmount: .2
+      roughness: piece.candy ? .24 : .2
+      clearcoatAmount: piece.candy ? .35 : 0
+      clearcoatRoughnessAmount: piece.candy ? .08 : .2
       // Orbital lights burn in their own colour whatever the room is doing.
-      emissiveFactor: piece.design === 0 ? (piece.record.white ? Qt.vector3d(.22,.95,1.05) : Qt.vector3d(1.25,.55,.08)) : Qt.vector3d(0,0,0)
+      emissiveFactor: piece.secondGlow
       cullMode: Material.NoCulling
     }
   }

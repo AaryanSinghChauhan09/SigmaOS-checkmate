@@ -132,9 +132,8 @@ struct Lathe {
   }
 };
 
-// Cut a field into a closed mesh: one vertex in every cell the surface crosses, joined
-// across each crossed grid edge. `settle` seats a vertex on the surface and keeps it;
-// `triangle` is handed the corners of each face, numbered in the order they were settled.
+// Join surface cells across crossed grid edges; settle seats and stores each vertex.
+// Triangle receives corner indices in settlement order.
 template<typename Distance,typename Settle,typename Triangle>
 void shell(const Distance &distance,P low,P high,float cell,const Settle &settle,const Triangle &triangle) {
   const int nx=int(std::ceil((high.x-low.x)/cell))+1, ny=int(std::ceil((high.y-low.y)/cell))+1, nz=int(std::ceil((high.z-low.z)/cell))+1;

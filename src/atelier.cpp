@@ -1,7 +1,7 @@
 #include "figures.h"
 
-// Midnight Atelier is a turned Staunton set: boxwood and walnut on brass shoes, a brass ring
-// under each crowned head, and a horse carved the way a club knight is.
+// Midnight Atelier is a turned Staunton set: stout boxwood and walnut on brass shoes, a brass
+// ring under each crowned head, and a horse carved the way a club knight is.
 namespace {
 using namespace Clay;
 using Figures::Field;
@@ -12,112 +12,116 @@ const Lathe sole({{0,-.02f},{.34f,-.02f},{.35f,0},{.35f,.06f},{.336f,.078f},{.33
 const Lathe shoe({{0,-.022f},{.346f,-.022f},{.361f,-.012f},{.365f,.005f},{.365f,.05f},{.359f,.066f},{.34f,.075f},{0,.075f}});
 const float rank[]={0,.8f,.95f,.92f,.95f,.98f,1};
 // The horse's head is laid out along its own axis: across, above the nose line, and down it from the poll.
-const Frame skull({0,1.0f,-.03f},{0,.762f,-.648f},{0,-.648f,-.762f});
+const Frame skull({0,.88f,-.02f},{0,.789f,-.614f},{0,-.614f,-.789f});
 
 float foot(P p,float scale) { return sole.distance(hypot2(p.x,p.z)/scale,p.y/scale)*scale; }
 Field band(float height,float radius,float tube) { return [=](P p) { return hoop({p.x,p.y-height,p.z},radius,tube); }; }
 
 Field pawn() {
-  const Lathe stem({{0,.12f},{.19f,.135f},{.172f,.168f},{.138f,.215f},{.108f,.29f},{.09f,.38f},{.082f,.46f},{0,.47f}});
+  const Lathe stem({{0,.12f},{.19f,.135f},{.174f,.166f},{.144f,.208f},{.118f,.27f},{.1f,.34f},{.092f,.4f},{0,.41f}});
   return [=](P p) {
     float d=smin(foot(p,.8f),stem.distance(hypot2(p.x,p.z),p.y),.012f);
-    d=smin(d,disc(p,.487f,.168f,.021f,.019f),.006f);
-    d=smin(d,horn(p,{0,.5f,0},{0,.57f,0},.088f,.078f),.01f);
-    return smin(d,ball(p,{0,.668f,0},.158f),.012f);
+    d=smin(d,disc(p,.425f,.172f,.021f,.019f),.006f);
+    d=smin(d,horn(p,{0,.44f,0},{0,.5f,0},.092f,.082f),.01f);
+    return smin(d,ball(p,{0,.6f,0},.16f),.012f);
   };
 }
 
-// The horse: an arched neck over a deep chest, the head tucked in, and a mane of overlapping locks.
+// How deep the middle of the neck lies at a height: back from the chest, then forward again to the poll.
+float spine(float height) {
+  return height<.6f ? .085f*saturate((height-.33f)/.27f) : height<.84f ? .085f-.05f*(height-.6f)/.24f : .035f-.055f*saturate((height-.84f)/.04f);
+}
+
+// The horse: a neck arched back over a deep chest, the head tucked in with a carved mouth, nostrils
+// and brow, and a mane laid over the crest in combed strands that end in points down each side.
 Field knight() {
-  const Frame forelock({0,1.095f,-.085f},{0,-.648f,-.762f},{1,0,0});
-  // Each lock of the mane: its height and depth, the lean of its length, and its size.
-  const float fall[7][5]={{1.09f,.06f,-.55f,.83f,.8f},{1.0f,.13f,-.75f,.66f,.9f},{.885f,.182f,-.9f,.44f,1},{.76f,.218f,-.96f,.28f,1},
-                          {.63f,.236f,-.98f,.2f,1},{.5f,.234f,-.99f,.14f,1},{.375f,.228f,-.995f,.1f,.95f}};
-  std::vector<std::pair<Frame,float>> locks;
-  for(const auto &lock:fall) locks.push_back({Frame({0,lock[0],lock[1]},{0,lock[2],lock[3]},{1,0,0}),lock[4]});
+  const Frame forelock({0,.972f,-.068f},{0,-.614f,-.789f},{1,0,0});
   return [=](P p) {
     const float d=smin(foot(p,.95f),disc(p,.215f,.258f,.032f,.022f),.01f);
     if(p.y<.12f) return d;
     const P m{std::abs(p.x),p.y,p.z};
-    float horse=horn(narrow(p,.8f),{0,.34f,0},{0,.72f,.07f},.215f,.16f)*.8f;
-    horse=smin(horse,horn(narrow(p,.72f),{0,.72f,.07f},{0,.98f,.01f},.16f,.135f)*.72f,.04f);
-    horse=smin(horse,egg(p,{0,.42f,-.105f},{.165f,.17f,.15f}),.05f);
-    if(p.y>.6f && p.z<.25f) {
-      float head=horn(narrow(p,.74f),{0,1.0f,-.03f},{0,.8f,-.265f},.125f,.068f)*.74f;
-      head=smin(head,egg(p,{0,.9f,-.07f},{.1f,.1f,.105f}),.03f);
-      head=smin(head,egg(p,{0,.782f,-.272f},{.058f,.06f,.062f}),.02f);
-      head=smin(head,egg(forelock.local(p),{0,0,0},{.03f,.068f,.042f}),.012f);
-      // Pricked ears, hollowed toward the front.
-      const float ear=smax(horn(m,{.058f,1.075f,.01f},{.074f,1.24f,-.015f},.042f,.013f),-egg(m,{.068f,1.16f,-.036f},{.02f,.055f,.02f}),.006f);
-      head=smin(head,ear,.015f);
-      // The mouth is a cut along the muzzle, with a nostril flared above it.
+    const float neck=smin(horn(narrow(p,.8f),{0,.33f,0},{0,.6f,.085f},.205f,.16f)*.8f,horn(narrow(p,.72f),{0,.6f,.085f},{0,.84f,.035f},.16f,.132f)*.72f,.04f);
+    float horse=smin(neck,egg(p,{0,.4f,-.105f},{.16f,.16f,.15f}),.05f);
+    if(p.y>.5f && p.z<.25f) {
+      float head=horn(narrow(p,.74f),{0,.88f,-.02f},{0,.705f,-.245f},.122f,.07f)*.74f;
+      // Cheek, the swell of the nose, and a lower lip under the cut of the mouth.
+      head=smin(head,egg(p,{0,.79f,-.06f},{.098f,.1f,.1f}),.03f);
+      head=smin(head,egg(p,{0,.69f,-.255f},{.058f,.058f,.065f}),.02f);
+      head=smin(head,egg(p,{0,.652f,-.212f},{.046f,.034f,.052f}),.015f);
+      head=smin(head,egg(forelock.local(p),{0,0,0},{.03f,.065f,.042f}),.012f);
       const P q=skull.local(p), s{std::abs(q.x),q.y,q.z};
-      head=smax(head,-egg(s,{0,-.04f,.37f},{.2f,.013f,.07f}),.004f);
-      head=smax(head,-ball(s,{.04f,.005f,.365f},.017f),.004f);
+      head=smin(head,horn(s,{.06f,.078f,.02f},{.068f,.07f,.095f},.016f,.013f),.012f);
+      // Pricked ears, hollowed toward the front.
+      const float ear=smax(horn(m,{.056f,.95f,.02f},{.07f,1.1f,0},.04f,.012f),-egg(m,{.066f,1.03f,-.022f},{.02f,.05f,.02f}),.006f);
+      head=smin(head,ear,.015f);
+      head=smax(head,-egg(s,{0,-.042f,.35f},{.2f,.013f,.075f}),.004f);
+      head=smax(head,-ball(s,{.04f,.008f,.345f},.019f),.004f);
       horse=smin(horse,head,.035f);
     }
-    if(p.z>-.05f) {
-      float mane=1e9f;
-      for(const auto &lock:locks) mane=smin(mane,egg(lock.first.local(p),{0,0,0},{.042f*lock.second,.095f*lock.second,.055f*lock.second}),.006f);
-      horse=smin(horse,mane,.012f);
+    if(p.y>.2f && p.z>-.08f) {
+      // The mane lies over the back of the neck like a cape: its edge falls in points, its strands wander as they run down.
+      const float behind=p.z-spine(p.y);
+      float mane=smax(smax(neck-.024f,.035f+.02f*std::sin(24*p.y)-behind,.008f),p.y-.99f,.01f);
+      mane+=.008f*std::sin(8*std::atan2(m.x,behind)+2*std::sin(9*p.y));
+      horse=smin(horse,mane*.8f,.008f);
     }
     return smin(d,horse,.03f);
   };
 }
 
 Field bishop() {
-  const Lathe stem({{0,.14f},{.225f,.155f},{.205f,.195f},{.168f,.25f},{.135f,.34f},{.112f,.47f},{.098f,.62f},{.092f,.74f},{.094f,.82f},{0,.83f}});
-  const Lathe mitre({{0,.86f},{.1f,.87f},{.128f,.915f},{.155f,.985f},{.166f,1.055f},{.158f,1.13f},{.128f,1.215f},{.08f,1.29f},{.035f,1.332f},{0,1.342f}});
+  const Lathe stem({{0,.14f},{.23f,.155f},{.21f,.195f},{.176f,.25f},{.146f,.33f},{.125f,.44f},{.112f,.56f},{.106f,.66f},{.106f,.71f},{0,.72f}});
+  const Lathe mitre({{0,.75f},{.105f,.76f},{.135f,.805f},{.162f,.875f},{.172f,.945f},{.163f,1.02f},{.132f,1.1f},{.083f,1.17f},{.036f,1.208f},{0,1.218f}});
   return [=](P p) {
     const float rho=hypot2(p.x,p.z);
     float d=smin(foot(p,.92f),stem.distance(rho,p.y),.012f);
-    d=smin(d,disc(p,.838f,.188f,.021f,.019f),.006f);
-    float head=smin(mitre.distance(rho,p.y),ball(p,{0,1.372f,0},.043f),.008f);
+    d=smin(d,disc(p,.73f,.195f,.022f,.02f),.006f);
+    float head=smin(mitre.distance(rho,p.y),ball(p,{0,1.246f,0},.044f),.008f);
     // The mitre's cut climbs from its middle to one shoulder, open to the front and the back.
-    const float across=-.819f*(p.x-.01f)+.574f*(p.y-1.09f), along=.574f*(p.x-.01f)+.819f*(p.y-1.09f);
+    const float across=-.819f*(p.x-.01f)+.574f*(p.y-.975f), along=.574f*(p.x-.01f)+.819f*(p.y-.975f);
     head=smax(head,-std::max(std::abs(across)-.017f,-.03f-along),.004f);
     return smin(d,head,.006f);
   };
 }
 
 Field rook() {
-  const Lathe tower({{0,.15f},{.245f,.165f},{.228f,.205f},{.204f,.265f},{.188f,.36f},{.18f,.5f},{.184f,.62f},{.2f,.7f},{.214f,.735f},{0,.74f}});
-  const Lathe turret({{0,.77f},{.2f,.775f},{.238f,.8f},{.262f,.83f},{.268f,.87f},{.268f,.985f},{.26f,1.0f},{.25f,1.005f},{0,1.005f}});
+  const Lathe tower({{0,.15f},{.25f,.165f},{.235f,.205f},{.215f,.26f},{.2f,.34f},{.194f,.45f},{.198f,.54f},{.212f,.6f},{.224f,.63f},{0,.635f}});
+  const Lathe turret({{0,.665f},{.21f,.67f},{.246f,.695f},{.268f,.725f},{.274f,.765f},{.274f,.865f},{.266f,.88f},{.256f,.885f},{0,.885f}});
   return [=](P p) {
     const float rho=hypot2(p.x,p.z);
     float d=smin(foot(p,.95f),tower.distance(rho,p.y),.012f);
-    d=smin(d,disc(p,.757f,.247f,.022f,.02f),.006f);
+    d=smin(d,disc(p,.652f,.255f,.022f,.02f),.006f);
     d=smin(d,turret.distance(rho,p.y),.006f);
     // The turret is hollowed, and six crenels are sawn through its wall.
-    d=smax(d,-disc(p,1.03f,.19f,.1f,.012f),.008f);
+    d=smax(d,-disc(p,.91f,.195f,.1f,.012f),.008f);
     const P q=wedge(p,6,pi/6);
-    return smax(d,-brick({q.x,q.y-1.0f,q.z+.25f},{.048f,.058f,.12f},.008f),.006f);
+    return smax(d,-brick({q.x,q.y-.88f,q.z+.255f},{.048f,.058f,.12f},.008f),.006f);
   };
 }
 
 Field queen() {
-  const Lathe stem({{0,.15f},{.245f,.168f},{.222f,.21f},{.18f,.27f},{.146f,.37f},{.124f,.52f},{.11f,.7f},{.102f,.86f},{.1f,.96f},{0,.97f}});
-  const Lathe cup({{0,1.0f},{.108f,1.01f},{.117f,1.06f},{.13f,1.15f},{.158f,1.25f},{.192f,1.335f},{.214f,1.39f},{.222f,1.425f},{.212f,1.445f},{.185f,1.43f},{.15f,1.435f},{.105f,1.462f},{.05f,1.482f},{0,1.486f}});
+  const Lathe stem({{0,.15f},{.25f,.168f},{.228f,.21f},{.192f,.268f},{.16f,.355f},{.138f,.47f},{.124f,.6f},{.116f,.72f},{.114f,.79f},{0,.8f}});
+  const Lathe cup({{0,.83f},{.118f,.84f},{.126f,.89f},{.142f,.97f},{.172f,1.06f},{.208f,1.14f},{.232f,1.19f},{.24f,1.225f},{.228f,1.243f},{.205f,1.215f},{.17f,1.188f},{.11f,1.215f},{.05f,1.24f},{0,1.245f}});
   return [=](P p) {
     const float rho=hypot2(p.x,p.z);
     float d=smin(foot(p,.98f),stem.distance(rho,p.y),.012f);
-    d=smin(d,disc(p,.985f,.2f,.022f,.02f),.006f);
-    // The coronet: the rim scooped between eight points with a pearl on each, around a domed cap and its ball.
-    float head=smax(cup.distance(rho,p.y),-ball(wedge(p,8,pi/8),{0,1.472f,-.228f},.056f),.008f);
-    head=smin(head,ball(wedge(p,8,0),{0,1.462f,-.207f},.033f),.006f);
-    head=smin(head,horn(p,{0,1.47f,0},{0,1.5f,0},.045f,.032f),.008f);
-    head=smin(head,ball(p,{0,1.54f,0},.05f),.006f);
+    d=smin(d,disc(p,.812f,.208f,.023f,.021f),.006f);
+    // An open coronet: the standing rim scooped between eight points with a pearl on each, around a domed cap and its ball.
+    float head=smax(cup.distance(rho,p.y),-ball(wedge(p,8,pi/8),{0,1.275f,-.25f},.068f),.008f);
+    head=smin(head,ball(wedge(p,8,0),{0,1.262f,-.222f},.038f),.006f);
+    head=smin(head,horn(p,{0,1.235f,0},{0,1.28f,0},.045f,.032f),.008f);
+    head=smin(head,ball(p,{0,1.318f,0},.052f),.006f);
     return smin(d,head,.006f);
   };
 }
 
 Field king() {
-  const Lathe stem({{0,.15f},{.25f,.17f},{.228f,.212f},{.186f,.275f},{.15f,.38f},{.128f,.54f},{.113f,.74f},{.104f,.92f},{.102f,1.03f},{0,1.04f}});
-  const Lathe cup({{0,1.07f},{.112f,1.08f},{.12f,1.13f},{.134f,1.22f},{.165f,1.32f},{.2f,1.4f},{.221f,1.45f},{.226f,1.48f},{.218f,1.5f},{.19f,1.512f},{.12f,1.54f},{.05f,1.556f},{0,1.56f}});
+  const Lathe stem({{0,.15f},{.255f,.17f},{.235f,.212f},{.2f,.27f},{.168f,.36f},{.145f,.48f},{.13f,.62f},{.122f,.76f},{.12f,.85f},{0,.86f}});
+  const Lathe cup({{0,.89f},{.125f,.9f},{.132f,.95f},{.148f,1.03f},{.178f,1.12f},{.21f,1.19f},{.228f,1.235f},{.232f,1.262f},{.222f,1.282f},{.19f,1.294f},{.12f,1.318f},{.05f,1.332f},{0,1.335f}});
   return [=](P p) {
     const float rho=hypot2(p.x,p.z);
     float d=smin(foot(p,1),stem.distance(rho,p.y),.012f);
-    d=smin(d,disc(p,1.052f,.205f,.023f,.021f),.006f);
+    d=smin(d,disc(p,.872f,.215f,.024f,.022f),.006f);
     return smin(d,cup.distance(rho,p.y),.006f);
   };
 }
@@ -127,21 +131,21 @@ std::vector<Mould> Atelier::moulds(int kind,int part) {
   if(kind<1 || kind>6) return {};
   if(part==0) {
     const Field wood=kind==1 ? pawn() : kind==2 ? knight() : kind==3 ? bishop() : kind==4 ? rook() : kind==5 ? queen() : king();
-    return {{wood,kind==2 ? .014f : kind==3 ? .015f : kind==1 ? .016f : .017f,.45f}};
+    return {{wood,kind==2 ? .013f : kind==3 || kind==5 ? .015f : kind==1 ? .016f : .017f,.45f}};
   }
   if(part==1) {
     const float scale=rank[kind];
     std::vector<Mould> brass{{[=](P p) { return shoe.distance(hypot2(p.x,p.z)/scale,p.y/scale)*scale; },.011f,.3f}};
     // A ring rests on the collar beneath each crowned head, and the king carries his cross.
-    if(kind==3) brass.push_back({band(.876f,.13f,.026f),.009f,.3f});
-    if(kind==5) brass.push_back({band(1.03f,.136f,.027f),.009f,.3f});
+    if(kind==3) brass.push_back({band(.768f,.136f,.027f),.009f,.3f});
+    if(kind==5) brass.push_back({band(.851f,.148f,.028f),.009f,.3f});
     if(kind==6) {
-      brass.push_back({band(1.1f,.14f,.028f),.009f,.3f});
-      brass.push_back({+[](P p) { return smin(pattee(p,{0,1.685f,0},.095f,.024f,.05f,.024f),horn(p,{0,1.55f,0},{0,1.61f,0},.042f,.03f),.008f); },.008f,.3f});
+      brass.push_back({band(.912f,.152f,.029f),.009f,.3f});
+      brass.push_back({+[](P p) { return smin(pattee(p,{0,1.44f,0},.085f,.024f,.048f,.024f),horn(p,{0,1.325f,0},{0,1.375f,0},.042f,.03f),.008f); },.008f,.3f});
     }
     return brass;
   }
-  // The knight's eyes are beads of ebony set either side of the skull.
-  if(part==2 && kind==2) return {{+[](P p) { const P q=skull.local(p); return egg({std::abs(q.x),q.y,q.z},{.073f,.05f,.056f},{.017f,.018f,.027f}); },.006f,.15f}};
+  // The knight's eyes are beads of ebony set under the brow either side of the skull.
+  if(part==2 && kind==2) return {{+[](P p) { const P q=skull.local(p); return egg({std::abs(q.x),q.y,q.z},{.07f,.048f,.055f},{.018f,.019f,.028f}); },.006f,.15f}};
   return {};
 }

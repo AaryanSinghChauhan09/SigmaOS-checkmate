@@ -25,8 +25,11 @@ Item {
   clip: true
   focus: true
   function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
-  function homeElevation() { return design === 2 ? -46 : -49 }
-  function homeDistance() { return design === 2 ? 12.9 : 13 }
+  function homeElevation() { return design === 2 ? -46 : -47 }
+  function homeDistance() { return design === 2 ? 12.9 : 17 }
+  // The cast sets are seen through a longer lens from further back, so the near rank is not looked down on from overhead.
+  property real lens: design === 2 ? 43 : 32
+  property real farthest: design === 2 ? 20 : 26
   function resetCamera() {
     manualAzimuth = 0
     elevation = Qt.binding(function() { return board.homeElevation() })
@@ -87,7 +90,8 @@ Item {
     environment: SceneEnvironment {
       backgroundMode: SceneEnvironment.Transparent
       lightProbe: Texture { textureData: SurfaceTexture { style: 4 } }
-      probeExposure: .75
+      // Candy sits in a brighter, softer room than the other sets.
+      probeExposure: board.design === 3 ? 1.15 : .75
       antialiasingMode: SceneEnvironment.MSAA
       antialiasingQuality: SceneEnvironment.High
       tonemapMode: SceneEnvironment.TonemapModeAces
@@ -95,7 +99,7 @@ Item {
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
     Node {
       eulerRotation: Qt.vector3d(board.elevation,board.azimuth,0)
-      PerspectiveCamera { id: camera; z: board.distance; clipNear: .1; clipFar: 150; fieldOfView: 43 }
+      PerspectiveCamera { id: camera; z: board.distance; clipNear: .1; clipFar: 150; fieldOfView: board.lens }
     }
     camera: camera
     DirectionalLight {
@@ -203,7 +207,7 @@ Item {
     Text {
       required property int index
       property vector3d projected: {
-        board.azimuth; board.elevation; board.distance; board.width; board.height
+        board.azimuth; board.elevation; board.distance; board.lens; board.width; board.height
         if (!board.sceneReady) return Qt.vector3d(-100,-100,0)
         return scene.mapFrom3DScene(index < 8 ? Qt.vector3d(index - 3.5,.14,4.25) : Qt.vector3d(-4.25,.14,3.5 - (index - 8)))
       }
@@ -244,7 +248,7 @@ Item {
       if (hit.objectHit && hit.objectHit.boardSquare !== undefined) backend.selectSquare(hit.objectHit.boardSquare)
       else backend.cancelSelection()
     }
-    onWheel: wheel => { board.distance = Math.max(10.5, Math.min(20, board.distance - wheel.angleDelta.y / 600)) }
+    onWheel: wheel => { board.distance = Math.max(10.5, Math.min(board.farthest, board.distance - wheel.angleDelta.y / 600)) }
   }
   Row {
     anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 20 }

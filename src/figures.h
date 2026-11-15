@@ -4,9 +4,8 @@
 #include <functional>
 #include <vector>
 
-// Orbital Orders, Midnight Atelier and Candy Kingdom are made of several materials, so each
-// part of a piece is cast on its own: a field of clay cut into a closed solid, its recesses
-// shaded the way a hand-finished miniature gathers shadow.
+// Cast each material region separately so a figure can combine wood, metal and inlay.
+// Recess shading stays with the sculpted surface.
 namespace Figures {
 using Field=std::function<float(Clay::P)>;
 // `cell` is how finely the solid is cut; `shade` is how far its recesses darken.
