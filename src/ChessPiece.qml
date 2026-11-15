@@ -79,9 +79,9 @@ Node {
       baseColor: piece.bodyColor
       vertexColorsEnabled: true
       metalness: piece.design === 0 ? .4 : 0
-      roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .56
-      specularAmount: piece.woodland ? .4 : .5
-      clearcoatAmount: piece.design === 3 ? .9 : piece.woodland ? .06 : .12
+      roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .7
+      specularAmount: piece.woodland ? .3 : .5
+      clearcoatAmount: piece.design === 3 ? .9 : piece.woodland ? 0 : .12
       clearcoatRoughnessAmount: .2
       cullMode: Material.NoCulling
     }

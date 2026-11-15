@@ -143,16 +143,18 @@ P pigment(unsigned hex) {
   return {channel(16),channel(8),channel(0)};
 }
 Tone tone(unsigned light,unsigned dark,float glow=0) { return {pigment(light),pigment(dark),glow}; }
-const Tone wood=tone(0xd3bd92,0x7e4a2b), footing=tone(0xb39262,0x55301c), hollow=tone(0x8f7650,0x452615);
-const Tone skin=tone(0xe9d3ad,0xd3a273), blush=tone(0xdfa286,0xc57b55), ink=tone(0x2a1a10,0x23150d);
-const Tone acorn=tone(0xb88c56,0xb47f43), husk=tone(0x94693b,0x8a5a2c);
-const Tone leaf=tone(0x6f7a37,0x76793a), leafEdge=tone(0x9ba25c,0xa79e56), sprig=tone(0x8f9651,0xe5d2a8);
-const Tone fur=tone(0xd9c69b,0xa5532a), furPale=tone(0xf0e6cc,0xeadbb9), sock=tone(0xbfa678,0x4f2a18);
-const Tone plume=tone(0xd4bf93,0x7b4a2c), down=tone(0xeee0be,0xc9a273), gold=tone(0xc79a4a,0xc7923c);
-const Tone tress=tone(0x9a5f35,0x6a3519), whisker=tone(0xefe5cc,0xe6d8b8), felt=tone(0x66722f,0x5f6b2d);
-const Tone petal=tone(0xf6eedb,0xf1e4c6), pollen=tone(0xd9a63a,0xd49a30);
-const Tone antler=tone(0xbb9763,0xb98d55), staff=tone(0x8e6a40,0x4f311d);
-const Tone doorway=tone(0x4b3421,0xf0b245,.85f), fungus=tone(0xb9794a,0xc4763f), stalk=tone(0xeadfc4,0xe3d1ae);
+// The board's key light and tone mapping brighten and saturate paint a good deal, so these are
+// mixed darker and greyer than the ivory, chestnut and olive they come out as on the board.
+const Tone wood=tone(0xb2a07a,0x6e4b33), footing=tone(0x7f705a,0x513827), hollow=tone(0x6c5f4c,0x462f22);
+const Tone skin=tone(0xb8a682,0x8f775a), blush=tone(0x9a6f60,0x83614f), ink=tone(0x2a1a10,0x23150d), lash=tone(0x574332,0x402b1f);
+const Tone acorn=tone(0x837054,0x816847), husk=tone(0x6c573c,0x674f32);
+const Tone leaf=tone(0x595f39,0x645c39), leafEdge=tone(0x737351,0x786e4c), sprig=tone(0x75755a,0x8e836c);
+const Tone fur=tone(0xb6a580,0x7c4f2f), furPale=tone(0xc4b898,0xb8a886), sock=tone(0xa39069,0x573623);
+const Tone plume=tone(0xb2a07a,0x6c4e36), down=tone(0xc2b592,0x8c775a), gold=tone(0x85704c,0x836940);
+const Tone tress=tone(0x6c4e36,0x5a3927), whisker=tone(0xc6bb9e,0xbcae8e), felt=tone(0x555c36,0x575a36);
+const Tone petal=tone(0xc8bea4,0xc2b596), pollen=tone(0x8a7339,0x8a7339);
+const Tone antler=tone(0x7f6c51,0x7d6748), staff=tone(0x67543c,0x4c3627);
+const Tone doorway=tone(0x432e21,0xa87a30,.85f), fungus=tone(0x7f5f46,0x835c3c), stalk=tone(0xbdb193,0xb5a685);
 
 // The clay being built up at one point in space: its distance and, when asked, its paint.
 struct Field {
@@ -352,13 +354,15 @@ void carve(const Sculptor &clay,P low,P high,float cell,Carving &out) {
   }
 
   const quint32 first=quint32(out.points.size());
-  for(const P &spot:spots) {
+  for(P &spot:spots) {
+    // Each vertex settles onto the true surface, so faces are smooth and details stay crisp.
+    spot=spot-gradient(clay,spot,cell*.4f)*std::clamp(measure(clay,spot),-cell*.6f,cell*.6f);
     const P normal=gradient(clay,spot,cell*.4f);
     Field f;
     f.paint=true;
     clay(spot,f);
     // Crevices are shaded where they are carved, warm like stained wood, with a little grain.
-    const float open=saturate(.55f*measure(clay,spot+normal*.03f)/.03f+.45f*measure(clay,spot+normal*.09f)/.09f);
+    const float open=saturate(.55f*(measure(clay,spot+normal*.03f)-f.d)/.03f+.45f*(measure(clay,spot+normal*.09f)-f.d)/.09f);
     const float grain=1+.04f*std::sin(38*(spot.x*.8f+spot.z*.6f)+2.5f*std::sin(spot.y*7));
     const float shade=(.42f+.58f*open)*grain, lit=shade+(1-shade)*f.glow;
     const P wash{std::pow(lit,.9f),lit,std::pow(lit,1.15f)};
@@ -414,7 +418,7 @@ Statue pawn() {
       f.add(egg(p,{0,.66f,-.012f},{.222f,.2f,.212f}),skin,.03f);
       f.add(ball(m,{.105f,.618f,-.118f},.082f),skin,.05f);
       f.add(ball(p,{0,.636f,-.226f},.024f),skin,.02f);
-      if(f.paint) f.tint(ball(m,{.122f,.612f,-.172f},.04f),blush,.03f,.55f);
+      if(f.paint) f.tint(ball(m,{.122f,.612f,-.172f},.045f),blush,.03f,.8f);
       const P q=crown.local(p);
       const float around=hypot2(q.x,q.z);
       float cup=dome.distance(around,q.y);
@@ -428,8 +432,8 @@ Statue pawn() {
     }
   };
   statue.details=[](const Sculptor &clay,Carving &out) {
-    for(float side:{-1.f,1.f}) out.stroke(clay,{side*.09f,.68f,-.2f},{0,0,1},.045f,205,335,.013f,ink);
-    out.stroke(clay,{0,.592f,-.2f},{0,0,1},.03f,215,325,.009f,ink);
+    for(float side:{-1.f,1.f}) out.stroke(clay,{side*.09f,.68f,-.2f},{0,0,1},.045f,205,335,.013f,lash);
+    out.stroke(clay,{0,.592f,-.2f},{0,0,1},.03f,215,325,.009f,lash);
   };
   return statue;
 }
@@ -439,7 +443,7 @@ Statue fox() {
   auto leaves=std::make_shared<std::vector<Leaf>>();
   const P a{0,.27f,.3f}, b{.2f,.25f,.27f}, c{.31f,.27f,.1f}, d{.33f,.35f,-.085f}, e{.285f,.5f,-.21f}, tip{.23f,.66f,-.255f};
   Statue statue;
-  statue.low={-.41f,-.03f,-.45f}; statue.high={.49f,1.43f,.43f}; statue.cell=.02f;
+  statue.low={-.41f,-.03f,-.45f}; statue.high={.51f,1.43f,.44f}; statue.cell=.02f;
   statue.clay=[=](P p,Field &f) {
     stand(f,p);
     const P m{std::abs(p.x),p.y,p.z};
@@ -448,18 +452,17 @@ Statue fox() {
       f.add(horn(p,{0,.42f,.05f},{0,.8f,-.07f},.225f,.158f),fur,.05f);
       f.add(egg(m,{.185f,.31f,.02f},{.105f,.15f,.165f}),fur,.04f);
       f.add(egg(m,{.185f,.19f,-.14f},{.058f,.044f,.095f}),sock,.02f);
-      f.add(horn(m,{.085f,.66f,-.13f},{.095f,.25f,-.2f},.066f,.05f),fur,.03f);
-      f.add(egg(m,{.095f,.19f,-.222f},{.056f,.042f,.074f}),sock,.02f);
-      if(f.paint) f.tint(horn(m,{.093f,.33f,-.185f},{.095f,.2f,-.2f},.075f,.065f),sock,.025f);
+      f.add(horn(m,{.088f,.66f,-.13f},{.1f,.25f,-.2f},.076f,.06f),fur,.03f);
+      f.add(egg(m,{.1f,.19f,-.222f},{.064f,.045f,.076f}),sock,.02f);
       f.add(horn(p,{0,.78f,-.06f},{0,.96f,-.09f},.15f,.125f),fur,.04f);
       f.add(egg(p,{0,.7f,-.15f},{.135f,.17f,.09f}),furPale,.04f);
       f.add(horn(p,{0,.66f,-.2f},{0,.5f,-.205f},.07f,.022f),furPale,.03f);
     }
     if(p.y<.95f && p.x>-.25f) {
-      float brush=smin(horn(p,a,b,.07f,.11f),horn(p,b,c,.11f,.125f),.03f);
-      brush=smin(brush,horn(p,c,d,.125f,.115f),.03f);
-      brush=smin(brush,horn(p,d,e,.115f,.085f),.03f);
-      float point=horn(p,e,tip,.085f,.022f);
+      float brush=smin(horn(p,a,b,.075f,.12f),horn(p,b,c,.12f,.14f),.03f);
+      brush=smin(brush,horn(p,c,d,.14f,.13f),.03f);
+      brush=smin(brush,horn(p,d,e,.13f,.095f),.03f);
+      float point=horn(p,e,tip,.095f,.024f);
       if(std::min(brush,point)<.04f) {
         // Locks of fur are combed along the brush.
         const float lock=.008f*(1-smooth(0,.5f,std::abs(std::sin(std::atan2(p.z-.05f,p.x-.05f)*9+p.y*16))));
@@ -558,14 +561,17 @@ Statue rook() {
   const Frame button({-.335f,.275f,-.15f},{-.2f,1,-.1f},{0,0,1});
   auto leaves=std::make_shared<std::vector<Leaf>>();
   Statue statue;
-  statue.low={-.46f,-.03f,-.42f}; statue.high={.5f,1.31f,.42f}; statue.cell=.021f;
+  statue.low={-.46f,-.03f,-.42f}; statue.high={.5f,1.31f,.42f}; statue.cell=.018f;
   statue.clay=[=](P p,Field &f) {
     stand(f,p);
     const float rho=hypot2(p.x,p.z), theta=std::atan2(p.z,p.x);
     float bark=trunk.distance(rho,p.y);
     if(bark<.06f) {
-      const float furrow=std::abs(std::sin(theta*7+1.8f*std::sin(p.y*8+theta*2)+p.y*1.5f));
-      bark+=.013f*(1-smooth(0,.45f,furrow))*smooth(.2f,.32f,p.y)*smooth(1.0f,.94f,p.y);
+      // The trunk is dressed in staggered courses of blocks, like a keep grown from a stump.
+      const float course=(p.y-.3f)/.14f, row=std::floor(course), v=course-row;
+      const float u=theta*(9/(2*pi))+.5f*(int(row)&1), h=u-std::floor(u);
+      const float seam=std::min(std::min(v,1-v)*.14f,std::min(h,1-h)*(2*pi/9)*rho);
+      bark+=.015f*(1-smooth(.005f,.024f,seam))*smooth(.24f,.31f,p.y)*smooth(1.0f,.95f,p.y);
     }
     f.add(bark,wood,.02f);
     if(p.y<.7f) f.add(horn(wedge(p,5,-pi/2+pi/5),{0,.4f,-.235f},{0,.17f,-.322f},.06f,.04f),wood,.045f);
@@ -608,6 +614,8 @@ Statue rook() {
 Statue queen() {
   const Lathe gown({{0,.12f},{.32f,.13f},{.345f,.19f},{.325f,.32f},{.27f,.56f},{.205f,.82f},{.16f,1.0f},{.15f,1.1f},{.165f,1.18f},{.14f,1.25f},{.07f,1.29f},{0,1.3f}});
   const Frame wreath({0,1.572f,.02f},{0,.985f,.174f},{0,0,1});
+  const P neck{0,1.3f,0};
+  const float grown=1.16f;
   auto leaves=std::make_shared<std::vector<Leaf>>();
   for(int i=-2;i<=2;++i) {
     const float lift=(i&1) ? .018f : 0;
@@ -618,7 +626,7 @@ Statue queen() {
     leaves->push_back(drape(turn,.095f+lift,1.305f,.285f+lift,1.0f,.1f,.026f,.03f,.04f));
   }
   Statue statue;
-  statue.low={-.44f,-.03f,-.41f}; statue.high={.44f,1.68f,.45f}; statue.cell=.02f;
+  statue.low={-.44f,-.03f,-.41f}; statue.high={.44f,1.76f,.45f}; statue.cell=.02f;
   statue.clay=[=](P p,Field &f) {
     stand(f,p);
     const P m{std::abs(p.x),p.y,p.z};
@@ -632,35 +640,38 @@ Statue queen() {
       f.add(ball(p,{0,.897f,-.212f},.056f),skin,.012f);
     }
     for(const Leaf &blade:*leaves) foliage(f,blade,p,leaf,leafEdge);
-    if(p.y>.45f) {
-      float hair=smax(egg(p,{0,1.51f,.02f},{.152f,.147f,.157f}),-egg(p,{0,1.455f,-.15f},{.098f,.135f,.1f}),.02f);
-      hair=smin(hair,horn(p,{0,1.48f,.07f},{0,1.1f,.15f},.145f,.15f),.03f);
-      hair=smin(hair,horn(p,{0,1.1f,.15f},{0,.72f,.19f},.15f,.1f),.03f);
-      hair=smin(hair,horn(m,{.115f,1.45f,-.02f},{.152f,1.24f,-.06f},.056f,.054f),.02f);
-      hair=smin(hair,horn(m,{.152f,1.24f,-.06f},{.128f,1.03f,-.125f},.054f,.028f),.02f);
-      if(hair<.04f) hair+=.007f*std::sin(p.x*48+3*std::sin(p.y*9)+p.z*14);
-      f.add(horn(p,{0,1.27f,0},{0,1.39f,-.012f},.06f,.052f),skin,.02f);
-      f.add(egg(p,{0,1.485f,-.02f},{.122f,.142f,.128f}),skin,.015f);
-      f.add(ball(p,{0,1.47f,-.15f},.02f),skin,.02f);
-      if(f.paint) f.tint(ball(m,{.062f,1.445f,-.118f},.03f),blush,.025f,.45f);
-      f.add(hair,tress,.008f);
-      const P q=wreath.local(p);
+    if(p.y>.3f) {
+      // Head, hair and wreath are modelled at life size, then enlarged about the neck as a storybook figure's are.
+      const P h=neck+(p-neck)*(1/grown), n{std::abs(h.x),h.y,h.z};
+      float hair=smax(egg(h,{0,1.51f,.02f},{.152f,.147f,.157f}),-egg(h,{0,1.455f,-.15f},{.098f,.135f,.1f}),.02f);
+      hair=smin(hair,horn(h,{0,1.48f,.07f},{0,1.1f,.15f},.145f,.15f),.03f);
+      hair=smin(hair,horn(h,{0,1.1f,.15f},{0,.72f,.19f},.15f,.1f),.03f);
+      hair=smin(hair,horn(n,{.115f,1.45f,-.02f},{.152f,1.24f,-.06f},.056f,.054f),.02f);
+      hair=smin(hair,horn(n,{.152f,1.24f,-.06f},{.128f,1.03f,-.125f},.054f,.028f),.02f);
+      if(hair<.04f) hair+=.007f*std::sin(h.x*48+3*std::sin(h.y*9)+h.z*14);
+      f.add(horn(h,{0,1.27f,0},{0,1.39f,-.012f},.06f,.052f)*grown,skin,.02f);
+      f.add(egg(h,{0,1.485f,-.02f},{.122f,.142f,.128f})*grown,skin,.015f);
+      f.add(ball(h,{0,1.47f,-.15f},.02f)*grown,skin,.02f);
+      if(f.paint) f.tint(ball(n,{.062f,1.445f,-.118f},.032f),blush,.025f,.7f);
+      f.add(hair*grown,tress,.008f);
+      const P q=wreath.local(h);
       float garland=hoop(q,.14f,.03f);
       if(garland<.04f) garland+=.008f*std::sin(std::atan2(q.z,q.x)*13);
-      f.add(garland,leaf,.01f);
+      f.add(garland*grown,leaf,.01f);
     }
   };
   statue.details=[=](const Sculptor &clay,Carving &out) {
-    for(float side:{-1.f,1.f}) out.stroke(clay,{side*.047f,1.512f,-.14f},{0,0,1},.026f,205,335,.0075f,ink);
-    out.stroke(clay,{0,1.438f,-.14f},{0,0,1},.02f,220,320,.006f,ink);
+    auto grow=[&](P at) { return neck+(at-neck)*grown; };
+    for(float side:{-1.f,1.f}) out.stroke(clay,grow({side*.047f,1.512f,-.14f}),{0,0,1},.03f,205,335,.008f,lash);
+    out.stroke(clay,grow({0,1.438f,-.14f}),{0,0,1},.022f,220,320,.0065f,lash);
     const float turns[]={-90,-42,-138,8,172,56,124,90};
     for(int i=0;i<8;++i) {
       const float a=turns[i]*pi/180;
       const P out3=wreath.u*std::cos(a)+wreath.w*std::sin(a);
-      out.blossom(wreath.world({.14f*std::cos(a),.012f,.14f*std::sin(a)})+out3*.022f+wreath.v*.018f,out3*.75f+wreath.v*.66f,i==0 ? .052f : .043f,i*.7f);
+      out.blossom(grow(wreath.world({.14f*std::cos(a),.012f,.14f*std::sin(a)})+out3*.022f+wreath.v*.018f),out3*.75f+wreath.v*.66f,i==0 ? .07f : .058f,i*.7f);
     }
     const P spots[]={{-.075f,.6f,-.6f},{.09f,.43f,-.6f},{-.02f,.29f,-.6f}};
-    const float sizes[]={.05f,.058f,.046f};
+    const float sizes[]={.056f,.064f,.05f};
     for(int i=0;i<3;++i) {
       const P hit=land(clay,spots[i],{0,0,1});
       out.blossom(hit,gradient(clay,hit,.01f),sizes[i],i*1.1f);
@@ -731,7 +742,7 @@ Statue king() {
     }
   };
   statue.details=[=](const Sculptor &clay,Carving &out) {
-    for(float side:{-1.f,1.f}) out.stroke(clay,{side*.07f,1.352f,-.17f},{0,0,1},.024f,205,335,.008f,ink);
+    for(float side:{-1.f,1.f}) out.stroke(clay,{side*.07f,1.352f,-.17f},{0,0,1},.024f,205,335,.008f,lash);
     const float turns[]={-128,-90,-54};
     for(int i=0;i<3;++i) {
       const float a=turns[i]*pi/180;
