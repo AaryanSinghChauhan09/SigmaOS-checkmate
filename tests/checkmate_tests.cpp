@@ -19,6 +19,8 @@
 #include <QQuick3D>
 #include <algorithm>
 #include <functional>
+#include <map>
+#include <utility>
 #include <cstring>
 #include <cmath>
 #include <limits>
@@ -601,13 +603,18 @@ private slots:
         SculptGeometry geometry;
         for(int design=0;design<4;++design) for(int kind=1;kind<=6;++kind) for(int part=0;part<6;++part) {
             geometry.setDesign(design); geometry.setKind(kind); geometry.setPart(part);
-            const auto data=geometry.vertexData();
+            const auto data=geometry.vertexData(),indices=geometry.indexData();
             const int stride=geometry.stride();
             QVERIFY(stride>=int(6*sizeof(float)));
-            for(int offset=0;offset+3*stride<=data.size();offset+=3*stride) {
+            // Carved figures share vertices through an index buffer; every other part lists its triangles outright.
+            const qsizetype corners=indices.isEmpty() ? data.size()/stride : indices.size()/qsizetype(sizeof(quint32));
+            for(qsizetype first=0;first+3<=corners;first+=3) {
                 QVector3D positions[3],normals[3];
                 for(int vertex=0;vertex<3;++vertex) {
-                    float values[6]; std::memcpy(values,data.constData()+offset+vertex*stride,sizeof(values));
+                    quint32 index=quint32(first+vertex);
+                    if(!indices.isEmpty()) std::memcpy(&index,indices.constData()+(first+vertex)*qsizetype(sizeof(quint32)),sizeof(index));
+                    QVERIFY((qsizetype(index)+1)*stride<=data.size());
+                    float values[6]; std::memcpy(values,data.constData()+qsizetype(index)*stride,sizeof(values));
                     for(float value:values) QVERIFY(std::isfinite(value));
                     positions[vertex]={values[0],values[1],values[2]};
                     normals[vertex]={values[3],values[4],values[5]};
@@ -620,6 +627,38 @@ private slots:
                 QVERIFY(QVector3D::dotProduct(face,normals[0]+normals[1]+normals[2])>=-.000001f);
                 if(face.lengthSquared()>1e-12f) for(const auto &normal:normals) QVERIFY(normal.lengthSquared()>.9f);
             }
+        }
+    }
+
+    void woodlandFiguresAreClosedPaintedCarvings() {
+        SculptGeometry geometry;
+        geometry.setDesign(2);
+        for(int kind=1;kind<=6;++kind) for(int tone=0;tone<2;++tone) {
+            geometry.setKind(kind); geometry.setTone(tone); geometry.setPart(0);
+            const auto data=geometry.vertexData(),indices=geometry.indexData();
+            const int stride=geometry.stride();
+            QCOMPARE(stride,int(12*sizeof(float)));
+            const qsizetype corners=indices.size()/qsizetype(sizeof(quint32));
+            QVERIFY(corners>9000 && corners%3==0);
+            // Every edge is shared by an even number of triangles, so a figure has no open seams.
+            std::map<std::pair<quint32,quint32>,int> edges;
+            for(qsizetype first=0;first<corners;first+=3) {
+                quint32 corner[3]; std::memcpy(corner,indices.constData()+first*qsizetype(sizeof(quint32)),sizeof(corner));
+                for(int side=0;side<3;++side) {
+                    const quint32 from=corner[side],to=corner[(side+1)%3];
+                    QVERIFY((qsizetype(from)+1)*stride<=data.size());
+                    ++edges[{std::min(from,to),std::max(from,to)}];
+                }
+            }
+            for(const auto &edge:edges) QVERIFY(edge.second%2==0);
+            for(qsizetype offset=0;offset+stride<=data.size();offset+=stride) {
+                float paint[4]; std::memcpy(paint,data.constData()+offset+8*qsizetype(sizeof(float)),sizeof(paint));
+                for(float channel:paint) QVERIFY(channel>=0 && channel<=1);
+            }
+            // A figure stands on its own square, and is no taller than the king's antlers.
+            QVERIFY(geometry.boundsMin().y()>-.05f && geometry.boundsMax().y()>.9f && geometry.boundsMax().y()<2.3f);
+            QVERIFY(geometry.boundsMin().x()>-.55f && geometry.boundsMax().x()<.55f);
+            QVERIFY(geometry.boundsMin().z()>-.55f && geometry.boundsMax().z()<.55f);
         }
     }
 

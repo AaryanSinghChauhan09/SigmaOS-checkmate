@@ -8,8 +8,11 @@ Item {
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
   property real manualAzimuth: 0
   property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
-  property real elevation: -52
-  property real distance: 13.2
+  // Moss & Myth figures turn with the seat as the camera does, so their faces stay toward whoever is playing.
+  property real seat: seatAngle()
+  // The carved faces read best from a lower seat; the home view follows the set until the player orbits or zooms.
+  property real elevation: homeElevation()
+  property real distance: homeDistance()
   property int cursorSquare: 12
   property bool keyboardMode: false
   property real checkGlow: .22
@@ -21,10 +24,13 @@ Item {
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
+  function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
+  function homeElevation() { return design === 2 ? -46 : -52 }
+  function homeDistance() { return design === 2 ? 12.9 : 13.2 }
   function resetCamera() {
     manualAzimuth = 0
-    elevation = -52
-    distance = 13.2
+    elevation = Qt.binding(function() { return board.homeElevation() })
+    distance = Qt.binding(function() { return board.homeDistance() })
   }
   function keyboardSelect() { keyboardMode = true; backend.selectSquare(cursorSquare) }
   function navigate(dx, dy) {
@@ -37,9 +43,13 @@ Item {
     cursorSquare = y * 8 + x
   }
   Behavior on azimuth { id: rotationBehavior; enabled: board.motion && !orbit.dragging; NumberAnimation { id: cameraTurn; duration: 650; easing.type: Easing.InOutCubic } }
+  Behavior on seat { id: seatBehavior; enabled: board.motion; NumberAnimation { id: seatTurn; duration: 650; easing.type: Easing.InOutCubic } }
   onMotionChanged: {
     if (!motion) {
       rotationBehavior.enabled = false
+      seatBehavior.enabled = false
+      seat = Qt.binding(function() { return board.seatAngle() })
+      seatBehavior.enabled = Qt.binding(function() { return board.motion })
       checkPulse.stop(); checkGlow = .22
       azimuth = Qt.binding(function() {
         return (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + board.manualAzimuth
@@ -155,6 +165,7 @@ Item {
         pieceId: index
         record: backend.pieces[index]
         design: board.design
+        seat: board.seat
         motion: board.motion
         selected: backend.selected === record.square && record.alive
       }

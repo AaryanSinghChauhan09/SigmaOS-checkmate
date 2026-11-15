@@ -10,24 +10,27 @@ Node {
   required property int design
   required property bool motion
   required property bool selected
+  required property real seat
   property real lift: 0
   property real presence: record.alive ? 1 : 0
   property bool ready: false
+  // Moss & Myth is one carved figure per piece, painted in its mesh rather than by part.
+  property bool woodland: design === 2
   property color bodyColor: design === 0 ? (record.white ? "#e2d8c2" : "#242a32")
                             : design === 1 ? (record.white ? "#eed8aa" : "#59321b")
-                            : design === 2 ? (record.white ? "#cdb78c" : "#8b4927")
+                            : design === 2 ? "#ffffff"
                             : (record.white ? "#f38289" : "#935699")
-  property color trimColor: design === 0 ? "#b99050"
-                            : design === 1 ? "#c89b51" : design === 2 ? "#69723a" : "#eabe58"
+  property color trimColor: design === 0 ? "#b99050" : design === 1 ? "#c89b51" : "#eabe58"
   property color secondaryColor: design === 0 ? (record.white ? "#52cdd0" : "#ffb84d")
                                  : design === 1 ? (record.white ? "#c8ac7e" : "#362115")
-                                 : design === 2 ? (record.kind === 1 || record.kind === 4 ? "#ae7e4b" : record.kind === 5 ? "#805027" : "#e6d4aa")
                                  : (record.white ? "#b94f72" : "#693b85")
   x: record.square % 8 - 3.5
   z: 3.5 - Math.floor(record.square / 8)
   y: .12 + lift + (selected ? .1 : 0)
   scale: Qt.vector3d(presence, presence, presence)
-  eulerRotation.y: record.kind === 2 ? (record.white ? 90 : -90) : (record.white ? 180 : 0)
+  // The woodland folk face whoever is seated at the board, the foxes turned in toward its middle.
+  eulerRotation.y: woodland ? 180 + seat + (record.kind === 2 ? (pieceId % 2 ? 32 : -32) * Math.cos(seat * Math.PI / 180) : 0)
+                   : record.kind === 2 ? (record.white ? 90 : -90) : (record.white ? 180 : 0)
   Behavior on x { id: xBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideX; duration: 360; easing.type: Easing.InOutCubic } }
   Behavior on z { id: zBehavior; enabled: piece.ready && piece.motion; NumberAnimation { id: slideZ; duration: 360; easing.type: Easing.InOutCubic } }
   Behavior on y { id: yBehavior; enabled: piece.ready && piece.motion && !hop.running; NumberAnimation { id: selectionLift; duration: 180; easing.type: Easing.OutCubic } }
@@ -69,14 +72,16 @@ Node {
     objectName: "piece-" + piece.pieceId
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
-    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 0 }
+    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; tone: piece.record.white ? 0 : 1; part: 0 }
+    Texture { id: surface; textureData: SurfaceTexture { style: piece.design === 1 ? (piece.record.white ? 5 : 1) : piece.design } tilingModeVertical: Texture.Repeat }
     materials: PrincipledMaterial {
-      baseColorMap: Texture { textureData: SurfaceTexture { style: piece.design === 1 ? (piece.record.white ? 5 : 1) : piece.design === 2 ? 7 : piece.design } tilingModeVertical: Texture.Repeat }
+      baseColorMap: piece.woodland ? null : surface
       baseColor: piece.bodyColor
+      vertexColorsEnabled: true
       metalness: piece.design === 0 ? .4 : 0
-      roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .52
-      specularAmount: .5
-      clearcoatAmount: piece.design === 3 ? .9 : .12
+      roughness: piece.design === 3 ? .16 : piece.design === 1 ? .30 : piece.design === 0 ? .28 : .56
+      specularAmount: piece.woodland ? .4 : .5
+      clearcoatAmount: piece.design === 3 ? .9 : piece.woodland ? .06 : .12
       clearcoatRoughnessAmount: .2
       cullMode: Material.NoCulling
     }
@@ -84,19 +89,21 @@ Node {
   Model {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
+    visible: !piece.woodland
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 1 }
     materials: PrincipledMaterial {
       baseColor: piece.trimColor
-      metalness: piece.design === 2 ? 0 : .8
-      roughness: piece.design === 2 ? .6 : .25
+      metalness: .8
+      roughness: .25
       cullMode: Material.NoCulling
     }
   }
   Model {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
+    visible: !piece.woodland
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 2 }
-    materials: PrincipledMaterial { baseColor: piece.design === 2 ? "#3d2718" : "#1b1a20"; roughness: .25; cullMode: Material.NoCulling }
+    materials: PrincipledMaterial { baseColor: "#1b1a20"; roughness: .25; cullMode: Material.NoCulling }
   }
   Repeater3D {
     model: 3
@@ -104,6 +111,7 @@ Node {
       required property int index
       property int boardSquare: piece.record.square
       pickable: piece.record.alive
+      visible: !piece.woodland
       geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 3 + index }
       materials: PrincipledMaterial {
         baseColor: index === 0 ? piece.secondaryColor : index === 1 ? (piece.record.kind === 5 ? "#f5e2bc" : "#ac793e") : (piece.record.white ? "#efd5ac" : "#dbad79")

@@ -1,4 +1,5 @@
 #include "sculptgeometry.h"
+#include "woodland.h"
 #include <QMatrix4x4>
 #include <QQuaternion>
 #include <QVector2D>
@@ -11,7 +12,7 @@
 
 namespace {
 constexpr float pi = 3.14159265358979323846f;
-struct Vertex { QVector3D position, normal; QVector2D uv; };
+using Vertex = SculptVertex;
 struct Mesh {
   std::vector<Vertex> vertices;
   void triangle(QVector3D a, QVector3D b, QVector3D c, QVector3D na, QVector3D nb, QVector3D nc) {
@@ -24,7 +25,8 @@ struct Mesh {
       std::swap(b,c); std::swap(nb,nc);
     }
     auto uv = [](QVector3D p) { return QVector2D(std::atan2(p.z(),p.x())/(2*pi)+.5f,p.y()); };
-    vertices.push_back({a,na,uv(a)}); vertices.push_back({b,nb,uv(b)}); vertices.push_back({c,nc,uv(c)});
+    const QVector4D plain(1,1,1,1);
+    vertices.push_back({a,na,uv(a),plain}); vertices.push_back({b,nb,uv(b),plain}); vertices.push_back({c,nc,uv(c),plain});
   }
   void lathe(const std::vector<QVector2D> &profile, const QMatrix4x4 &transform = {}, int sides = 48) {
     const QMatrix4x4 normals = transform.inverted().transposed();
@@ -202,12 +204,6 @@ struct Mesh {
       }
     }
   }
-  void flower(QVector3D center,float radius) {
-    for(int i=0;i<5;++i) {
-      float a=2*pi*i/5;
-      sphere(center+QVector3D(std::cos(a)*radius*.6f,std::sin(a)*radius*.6f,-.01f),{radius*.45f,radius*.45f,.025f});
-    }
-  }
   void arc(QVector3D center,float radius,float start,float end,float tubeRadius) {
     std::vector<QVector3D> points;
     for(int i=0;i<=16;++i) { float a=(start+(end-start)*i/16)*pi/180; points.push_back(center+QVector3D(radius*std::cos(a),radius*std::sin(a),0)); }
@@ -219,10 +215,12 @@ SculptGeometry::SculptGeometry(QQuick3DObject *parent) : QQuick3DGeometry(parent
 void SculptGeometry::setKind(int value) { if (m_kind != value) { m_kind=value; rebuild(); emit changed(); } }
 void SculptGeometry::setDesign(int value) { if (m_design != value) { m_design=value; rebuild(); emit changed(); } }
 void SculptGeometry::setPart(int value) { if (m_part != value) { m_part=value; rebuild(); emit changed(); } }
+void SculptGeometry::setTone(int value) { if (m_tone != value) { m_tone=value; rebuild(); emit changed(); } }
 void SculptGeometry::rebuild() {
-  struct Sculpture { QByteArray vertices; QVector3D minimum, maximum; };
+  struct Sculpture { QByteArray vertices, indices; QVector3D minimum, maximum; };
   static std::map<int,Sculpture> sculptures;
-  const int key=(m_design*6+m_kind-1)*6+m_part;
+  const bool orbital=m_design==0, atelier=m_design==1, woodland=m_design==2, candy=m_design==3;
+  const int key=((m_design*6+m_kind-1)*6+m_part)*2+(woodland && m_tone ? 1 : 0);
   auto upload=[&](const Sculpture &shape) {
     clear();
     setVertexData(shape.vertices);
@@ -231,6 +229,12 @@ void SculptGeometry::rebuild() {
     addAttribute(QQuick3DGeometry::Attribute::PositionSemantic,0,QQuick3DGeometry::Attribute::F32Type);
     addAttribute(QQuick3DGeometry::Attribute::NormalSemantic,sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
     addAttribute(QQuick3DGeometry::Attribute::TexCoord0Semantic,2*sizeof(QVector3D),QQuick3DGeometry::Attribute::F32Type);
+    // Only the carved woodland figures carry paint and share vertices between triangles.
+    if(woodland) addAttribute(QQuick3DGeometry::Attribute::ColorSemantic,2*sizeof(QVector3D)+sizeof(QVector2D),QQuick3DGeometry::Attribute::F32Type);
+    if(!shape.indices.isEmpty()) {
+      setIndexData(shape.indices);
+      addAttribute(QQuick3DGeometry::Attribute::IndexSemantic,0,QQuick3DGeometry::Attribute::U32Type);
+    }
     setBounds(shape.minimum,shape.maximum);
     update();
   };
@@ -238,8 +242,8 @@ void SculptGeometry::rebuild() {
   const auto found=sculptures.find(key);
   if(found!=sculptures.end()) { upload(found->second); return; }
   Mesh mesh;
+  std::vector<quint32> indices;
   const int kind=m_kind,part=m_part;
-  const bool orbital=m_design==0, atelier=m_design==1, woodland=m_design==2, candy=m_design==3;
   auto base=[&]() {
     if (candy) mesh.turned({{0,0},{.27f,0},{.34f,.045f},{.35f,.1f},{.32f,.16f},{.27f,.18f},{0,.18f}});
     else mesh.turned({{0,0},{.29f,0},{.335f,.025f},{.34f,.065f},{.33f,.10f},{.29f,.14f},{.27f,.17f},{0,.17f}});
@@ -261,7 +265,7 @@ void SculptGeometry::rebuild() {
   auto cross=[&](float y) {
     mesh.box({0,y,0},{.065f,.25f,.07f}); mesh.box({0,y+.025f,0},{.20f,.065f,.07f});
   };
-  if(part==0) base();
+  if(part==0 && !woodland) base();
   if (!woodland && part==1 && !candy) mesh.lathe({{.295f,.018f},{.338f,.018f},{.338f,.055f},{.295f,.055f}});
 
   if (orbital) {
@@ -393,119 +397,10 @@ void SculptGeometry::rebuild() {
         }
       }
     }
-  } else {
-    // Woodland has complete characters instead of themed Staunton bodies.
-    if(kind==1) {
-      if(part==0) {
-        mesh.turned({{0,.14f},{.23f,.14f},{.25f,.22f},{.16f,.40f},{.12f,.47f},{0,.47f}});
-        mesh.sphere({0,.61f,-.015f},{.19f,.17f,.17f});
-        for(float side:{-1.f,1.f}) mesh.sphere({side*.09f,.23f,-.14f},{.075f,.11f,.09f});
-      } else if(part==1) for(int i=0;i<7;++i) {float a=2*pi*i/7;mesh.leaf({.11f*std::cos(a),.48f,.11f*std::sin(a)},{.25f*std::cos(a),.28f,.25f*std::sin(a)},.07f);}
-      else if(part==2) {
-        for(float side:{-1.f,1.f}) mesh.arc({side*.066f,.62f,-.174f},.027f,200,340,.007f);
-        mesh.arc({0,.56f,-.179f},.024f,210,330,.005f);
-      } else if(part==3) {
-        QMatrix4x4 cap; cap.translate(0,.035f,.06f);
-        mesh.turned({{0,.70f},{.25f,.70f},{.26f,.74f},{.21f,.84f},{.11f,.91f},{0,.93f}},cap);
-        mesh.branch({0,.945f,.06f},{.02f,1.035f,.06f},.035f);
-        for(int row=0;row<3;++row) for(int i=0;i<14;++i) {
-          float a=2*pi*(i+.5f*(row%2))/14,r=.235f-row*.05f,y=.76f+row*.055f;
-          mesh.sphere({r*std::cos(a),y+.035f,.06f+r*std::sin(a)},{.035f,.027f,.035f});
-        }
-      }
-    } else if(kind==2) {
-      if(part==0) {
-        mesh.sphere({0,.53f,.06f},{.24f,.36f,.24f});
-        mesh.loft({{.75f,.14f,-.015f,.13f},{.91f,.20f,-.06f,.19f},{1.04f,.18f,-.10f,.22f},{1.12f,.08f,-.10f,.15f},{1.15f,.001f,-.08f,.001f}});
-        for(float side:{-1.f,1.f}) {
-          mesh.tube({{side*.14f,1.05f,.025f},{side*.19f,1.19f,.04f},{side*.17f,1.34f,.015f}},.09f,.005f);
-          mesh.tube({{side*.11f,.51f,-.11f},{side*.11f,.23f,-.16f}},.055f,.045f);
-        }
-        mesh.tube({{.13f,.27f,.12f},{.28f,.27f,.22f},{.30f,.43f,.25f},{.28f,.62f,.22f}},.12f,.07f);
-      } else if(part==3) {
-        mesh.loft({{.90f,.04f,-.27f,.08f},{.95f,.11f,-.23f,.19f},{1.015f,.10f,-.22f,.15f},{1.04f,.001f,-.17f,.001f}});
-        for(int i=0;i<7;++i) {float x=(i-3)*.037f;mesh.leaf({x,.78f,-.16f},{x*.7f,.43f,-.18f},.055f,.035f);}
-        mesh.sphere({.28f,.64f,.22f},{.075f,.12f,.08f});
-      } else if(part==2) {
-        mesh.sphere({0,.965f,-.423f},{.026f,.022f,.025f});
-        for(float side:{-1.f,1.f}) mesh.sphere({side*.16f,1.05f,-.19f},{.017f,.018f,.02f});
-      } else if(part==1) for(float side:{-1.f,1.f}) for(int i=0;i<4;++i) mesh.leaf({side*.19f,.34f+i*.06f,.01f},{side*.24f,.42f+i*.06f,-.07f},.03f);
-    } else if(kind==3) {
-      if(part==0) {
-        mesh.sphere({0,.62f,0},{.245f,.40f,.21f});
-        mesh.sphere({0,1.05f,0},{.27f,.25f,.18f});
-        for(float side:{-1.f,1.f}) mesh.tube({{side*.17f,1.16f,0},{side*.25f,1.31f,.02f}},.075f,.005f);
-        for(int row=0;row<5;++row) for(int col=-2;col<=2;++col) {
-          float x=col*.075f+(row%2)*.02f,y=.4f+row*.10f;
-          mesh.leaf({x,y+.10f,-.18f},{x,y,-.20f},.045f,.025f);
-        }
-      } else if(part==1) for(float side:{-1.f,1.f}) for(int i=0;i<5;++i) mesh.leaf({side*.13f,.95f-i*.035f,-.04f},{side*(.29f-i*.015f),.54f-i*.025f,-.06f},.055f,.03f);
-      else if(part==3) for(float side:{-1.f,1.f}) mesh.sphere({side*.12f,1.06f,-.16f},{.13f,.15f,.065f});
-      else if(part==4) {
-        for(float side:{-1.f,1.f}) mesh.sphere({side*.12f,1.06f,-.218f},{.073f,.084f,.022f});
-        mesh.tube({{0,1.02f,-.22f},{0,.93f,-.26f}},.035f,.002f);
-      } else if(part==2) for(float side:{-1.f,1.f}) mesh.sphere({side*.12f,1.07f,-.239f},{.045f,.059f,.017f});
-    } else if(kind==4) {
-      if(part==0) {
-        mesh.lathe({{0,.16f},{.26f,.16f},{.25f,.30f},{.22f,.86f},{.29f,.94f},{.29f,1.09f},{.21f,1.09f},{.21f,.92f},{0,.92f}},QMatrix4x4(),32);
-        for(int i=0;i<9;++i) {float a=2*pi*i/9;mesh.box({.25f*std::cos(a),1.13f,.25f*std::sin(a)},{.12f,.18f,.12f},-a*180/pi);}
-      } else if(part==2) {
-        mesh.loft({{.16f,.09f,-.245f,.012f},{.45f,.09f,-.239f,.013f},{.57f,.06f,-.23f,.013f},{.61f,.001f,-.23f,.001f}});
-        for(int i=0;i<12;++i) {float a=2*pi*i/12; if(std::sin(a)<-.8f)continue;mesh.tube({{.252f*std::cos(a),.21f,.252f*std::sin(a)},{.232f*std::cos(a+.03f),.60f,.232f*std::sin(a+.03f)},{.24f*std::cos(a),.89f,.24f*std::sin(a)}},.007f);}
-      } else if(part==1) for(int i=0;i<5;++i) mesh.leaf({.11f+i*.025f,.22f+i*.06f,-.24f},{.22f+i*.01f,.28f+i*.06f,-.24f},.035f);
-      else if(part==3) {
-        for(float side:{-1.f,1.f}) {
-          float y=side<0?.48f:.70f;
-          mesh.branch({side*.22f,.16f,0},{side*.31f,y,0},.025f);
-          mesh.sphere({side*.31f,y,0},{.11f,.045f,.10f});
-        }
-      }
-    } else {
-      const bool king=kind==6;
-      if(part==0) {
-        mesh.loft({{.15f,.27f,0,.23f},{.24f,.29f,0,.25f},{.49f,.24f,0,.19f},{.83f,.19f,0,.16f},{1.01f,.15f,0,.12f},{1.09f,.09f,0,.08f}});
-        for(float side:{-1.f,1.f}) mesh.tube({{side*.13f,.97f,0},{side*.21f,.77f,-.025f},{side*.18f,.58f,-.13f}},.07f,.055f);
-      } else if(part==5) {
-        mesh.sphere({0,1.19f,-.02f},{.145f,.19f,.14f});
-        mesh.sphere({0,1.19f,-.163f},{.034f,.047f,.035f});
-        for(float side:{-1.f,1.f}) mesh.sphere({side*.18f,.61f,-.14f},{.045f,.06f,.04f});
-      } else if(part==1) {
-        for(float side:{-1.f,1.f}) {
-          mesh.leaf({side*.07f,1.03f,-.12f},{side*.25f,.22f,-.19f},.12f,.05f);
-          mesh.leaf({side*.13f,.96f,.08f},{side*.28f,.24f,.08f},.16f,.04f);
-        }
-        for(float side:{-1.f,1.f}) for(int i=0;i<6;++i) {
-          float y=.28f+i*.105f;
-          mesh.leaf({side*.09f,y+.13f,-.20f},{side*(.23f-i*.014f),y,-.17f},.06f,.025f);
-        }
-        if(king) {
-          QMatrix4x4 hat; hat.translate(0,1.34f,.035f); hat.rotate(25,1,0,0);
-          mesh.turned({{0,0},{.26f,0},{.28f,.04f},{.18f,.09f},{.14f,.21f},{.04f,.29f},{0,.28f}},hat);
-        } else for(int i=0;i<9;++i) {float a=2*pi*i/9;mesh.leaf({.15f*std::cos(a),1.34f,.15f*std::sin(a)},{.22f*std::cos(a),1.45f,.22f*std::sin(a)},.05f);}
-      } else if(part==3) {
-        if(king) {
-          for(int i=-4;i<=4;++i) {
-            float x=i*.03f;
-            mesh.tube({{x,1.13f,-.14f},{x*1.3f,1.02f,-.21f},{x*.5f,.87f+std::abs(i)*.025f,-.20f}},.027f,.008f);
-          }
-          for(float side:{-1.f,1.f}) mesh.tube({{side*.01f,1.16f,-.18f},{side*.09f,1.13f,-.22f},{side*.15f,1.09f,-.17f}},.025f,.01f);
-        } else {
-          for(float side:{-1.f,1.f}) for(int i=0;i<4;++i) mesh.tube({{side*(.07f+i*.027f),1.36f,.005f},{side*(.13f+i*.018f),1.20f,.045f},{side*(.14f+i*.02f),.99f,.055f},{side*(.19f+i*.02f),.86f,.02f}},.035f,.018f);
-        }
-      } else if(part==4 && !king) {
-        for(auto center:{QVector3D(-.18f,.78f,-.15f),QVector3D(.20f,.48f,-.17f)}) mesh.flower(center,.065f);
-        for(int i=0;i<10;++i) {float a=2*pi*i/10;mesh.flower({.18f*std::cos(a),1.38f+.02f*std::sin(a),.16f*std::sin(a)},.055f);}
-      } else if(part==4 && king) {
-        for(float side:{-1.f,1.f}) {
-          mesh.tube({{side*.14f,1.38f,.02f},{side*.28f,1.51f,.04f},{side*.34f,1.70f,.03f},{side*.31f,1.83f,0}},.036f,.012f);
-          mesh.tube({{side*.28f,1.53f,.03f},{side*.43f,1.65f,.04f},{side*.46f,1.76f,.02f}},.023f,.007f);
-          mesh.tube({{side*.33f,1.68f,.03f},{side*.20f,1.76f,.02f},{side*.20f,1.86f,0}},.021f,.007f);
-        }
-      } else if(part==2) {
-        for(float side:{-1.f,1.f}) mesh.arc({side*.06f,1.24f,-.147f},.025f,195,345,.006f);
-        if(!king) mesh.arc({0,1.12f,-.15f},.022f,205,335,.005f);
-      }
-    }
+  } else if(part==0) {
+    // Moss & Myth figures are whole painted carvings rather than assembled parts.
+    const auto &figure=Woodland::figure(kind,m_tone);
+    mesh.vertices=figure.vertices; indices=figure.indices;
   }
   if (mesh.vertices.empty()) mesh.triangle({0,0,0},{0,0,0},{0,0,0},{0,1,0},{0,1,0},{0,1,0});
   QVector3D minimum=mesh.vertices.front().position,maximum=minimum;
@@ -513,6 +408,9 @@ void SculptGeometry::rebuild() {
     minimum[axis]=std::min(minimum[axis],vertex.position[axis]);
     maximum[axis]=std::max(maximum[axis],vertex.position[axis]);
   }
-  auto stored=sculptures.emplace(key,Sculpture{QByteArray(reinterpret_cast<const char *>(mesh.vertices.data()),int(mesh.vertices.size()*sizeof(Vertex))),minimum,maximum});
-  upload(stored.first->second);
+  Sculpture shape;
+  shape.vertices=QByteArray(reinterpret_cast<const char *>(mesh.vertices.data()),qsizetype(mesh.vertices.size()*sizeof(Vertex)));
+  shape.indices=QByteArray(reinterpret_cast<const char *>(indices.data()),qsizetype(indices.size()*sizeof(quint32)));
+  shape.minimum=minimum; shape.maximum=maximum;
+  upload(sculptures.emplace(key,std::move(shape)).first->second);
 }
