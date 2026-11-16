@@ -584,10 +584,14 @@ private slots:
         QVERIFY(second.waitForStarted());
         // Listening on the socket is the last thing done before the window is loaded.
         QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(dir.filePath("checkmate.sock")),15000);
-        QCOMPARE(second.state(),QProcess::Running);
-        QVERIFY(second.readAllStandardError().contains("owns this saved game"));
+        const bool stillOpen=second.state()==QProcess::Running;
+        // What it says arrives in its own time, so it is gathered until the reason has come through.
+        QByteArray said;
+        QTRY_VERIFY_WITH_TIMEOUT((said+=second.readAllStandardError()).contains("owns this saved game") || second.state()!=QProcess::Running,5000);
         second.kill();
         QVERIFY(second.waitForFinished());
+        QVERIFY(stillOpen);
+        QVERIFY2(said.contains("owns this saved game"),said.constData());
     }
 
     void headlessCommandsReadSavedGames() {
