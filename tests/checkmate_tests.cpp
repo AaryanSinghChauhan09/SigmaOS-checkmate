@@ -734,6 +734,29 @@ private slots:
         }
     }
 
+    void orbitalDecksRunTrueAllRound() {
+        const float rank[]={0,.82f,.95f,.92f,.98f,1,1};
+        for(int kind=1;kind<=6;++kind) {
+            const auto moulds=Orbital::moulds(kind,0);
+            const SculptFigure figure=Figures::part(0,kind,0);
+            QVERIFY(!figure.indices.empty() && figure.indices.size()%3==0);
+            // The deck's rounded rim is finer than any grid cell; turned, it holds to its mould with no wobble.
+            float worst=0;
+            for(size_t first=0;first<figure.indices.size();first+=3) {
+                QVector3D middle;
+                for(int corner=0;corner<3;++corner) middle+=figure.vertices[figure.indices[first+corner]].position/3;
+                if(std::hypot(middle.x(),middle.z())<.29f*rank[kind]) continue;
+                // Only the deck is judged here; a carved hull may reach out over it.
+                const Clay::P at{middle.x(),middle.y(),middle.z()};
+                const float deck=std::abs(moulds.front().field(at));
+                bool carved=false;
+                for(size_t other=1;other<moulds.size();++other) carved=carved || std::abs(moulds[other].field(at))<deck;
+                if(!carved) worst=std::max(worst,deck);
+            }
+            QVERIFY2(worst<.0008f,qPrintable(QString("kind %1's deck strays %2 from its mould").arg(kind).arg(worst)));
+        }
+    }
+
     void turnedCapsKeepDirectionalContactShading() {
         const SculptFigure king=Figures::part(1,6,0);
         std::map<float,std::pair<float,float>> rings;

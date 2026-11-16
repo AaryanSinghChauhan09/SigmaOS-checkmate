@@ -8,6 +8,7 @@ using Figures::Field;
 using Figures::Mould;
 
 // Every piece stands on a deck, scaled to its rank: a plate under a low cone, a gold ring let into the step.
+// Each hull rises from inside the deck, so no hem of it is cut where the two meet.
 const Lathe deck({{0,.04f},{.31f,.05f},{.3f,.085f},{.25f,.118f},{.2f,.15f},{0,.15f}});
 const float rank[]={0,.82f,.95f,.92f,.98f,1,1};
 
@@ -35,7 +36,7 @@ Field sentinel() {
   return [=](P p) {
     const float rho=hypot2(p.x,p.z);
     const float dome=smax(egg(p,{0,.6f,0},{.2f,.215f,.2f}),-std::max(std::abs(p.y-.6f)-.036f,.183f-rho),.006f);
-    return smin(smin(base(p,.82f),neck.distance(rho,p.y),.008f),dome,.008f);
+    return smin(neck.distance(rho,p.y),dome,.008f);
   };
 }
 
@@ -52,7 +53,7 @@ float steed(P p) {
   if(p.y>.58f) d=smin(d,helm.distance(p),.012f);
   // The fins lean apart as they rise.
   if(p.y>.78f && p.z>-.22f) d=std::min(d,fin.distance({std::abs(p.x)-.048f-.2f*(p.y-.95f),p.y,p.z}));
-  return smin(base(p,.95f),d,.015f);
+  return d;
 }
 // Gold edging follows the whole silhouette of sail and helm.
 float edging(P p) {
@@ -70,7 +71,7 @@ Field visor() {
 // The halo spire: a slender hull that carries a ring and its light.
 Field spire() {
   const Lathe hull({{0,.11f},{.19f,.12f},{.172f,.19f},{.14f,.32f},{.108f,.48f},{.084f,.64f},{.068f,.78f},{.062f,.87f},{.074f,.91f},{0,.92f}});
-  return [=](P p) { return smin(smin(base(p,.92f),hull.distance(hypot2(p.x,p.z),p.y),.008f),disc(p,.82f,.088f,.014f,.008f),.004f); };
+  return [=](P p) { return smin(hull.distance(hypot2(p.x,p.z),p.y),disc(p,.82f,.088f,.014f,.008f),.004f); };
 }
 float halo(P p) {
   float d=std::min(hoop({p.x,p.z,p.y-1.1f},.15f,.021f),horn(p,{0,.94f,0},{0,1.27f,0},.011f,.011f));
@@ -86,30 +87,35 @@ Field seam() {
 }
 
 // The bastion: a waisted keep under a ring of eight merlons, a lit port below each.
+// The keep is drawn taut so its crown throws no lip, and the merlons are rounded as broadly as a cell so they cut clean.
 Field bastion() {
-  const Lathe keep({{0,.12f},{.215f,.13f},{.2f,.2f},{.186f,.32f},{.186f,.5f},{.2f,.6f},{.236f,.66f},{.262f,.7f},{.27f,.74f},{.27f,.93f},{.262f,.95f},{0,.95f}});
+  const Lathe keep({{0,.06f},{.215f,.07f},{.215f,.13f},{.2f,.2f},{.186f,.32f},{.186f,.5f},{.2f,.6f},{.236f,.66f},{.262f,.7f},{.27f,.74f},{.27f,.93f},{.262f,.95f},{0,.95f}},true);
   return [=](P p) {
-    float d=smin(base(p,.98f),keep.distance(hypot2(p.x,p.z),p.y),.008f);
-    d=smax(d,-disc(p,1.0f,.2f,.11f,.012f),.006f);
+    float d=keep.distance(hypot2(p.x,p.z),p.y);
+    d=smax(d,-disc(p,1.0f,.2f,.11f,.012f),.012f);
     const P gap=wedge(p,8,pi/8), port=wedge(p,8,0);
-    d=smax(d,-brick({gap.x,gap.y-.955f,gap.z+.25f},{.04f,.05f,.1f},.006f),.005f);
+    d=smax(d,-brick({gap.x,gap.y-.955f,gap.z+.25f},{.04f,.05f,.1f},.01f),.01f);
     return smax(d,-brick({port.x,port.y-.81f,port.z+.27f},{.022f,.05f,.04f},.01f),.005f);
   };
 }
 
 // The crescent regent: four broad panels overlap as they wind up her gown, and her shoulders
 // carry a moon as thick as the hull itself, lined with gold and cradling its light.
-const Lathe gown({{0,.12f},{.24f,.13f},{.235f,.22f},{.215f,.4f},{.185f,.6f},{.16f,.78f},{.152f,.86f},{.168f,.93f},{.195f,.97f},{.19f,1.0f},{.14f,1.02f},{0,1.03f}});
+const Lathe gown({{0,.06f},{.24f,.07f},{.24f,.13f},{.235f,.22f},{.215f,.4f},{.185f,.6f},{.16f,.78f},{.152f,.86f},{.168f,.93f},{.195f,.97f},{.19f,1.0f},{.14f,1.02f},{0,1.03f}});
 const float wind=.9f;
 // How far the panels stand off one another, fading out at hem and shoulder.
 float lift(float height) { return .07f*smooth(.16f,.3f,height)*smooth(.97f,.87f,height); }
 float sickle(P p) { return std::max(hypot2(p.x-.02f,p.y-1.24f)-.24f,.2f-hypot2(p.x+.07f,p.y-1.29f)); }
 float regent(P p) {
-  const float turn=4*std::atan2(p.z,p.x)/(2*pi)+wind*p.y, lap=turn-std::floor(turn)-.5f;
-  // Each panel steps down onto the next, so the field is eased to stay an honest underestimate.
-  const float dress=gown.distance(hypot2(p.x,p.z)+lift(p.y)*lap,p.y)*.65f;
+  const float rho=hypot2(p.x,p.z), turn=4*std::atan2(p.z,p.x)/(2*pi)+wind*p.y, lap=turn-std::floor(turn)-.5f, rise=lift(p.y);
+  auto panel=[&](float along) { return gown.distance(rho+rise*along,p.y); };
+  // Each panel steps down onto the next. This one is cut square where it begins, the one before runs on
+  // beneath it, and the next one's step is measured from behind, so the field stays whole across every step.
+  const float here=std::max(panel(lap),-rho*std::sin((lap+.5f)*pi/2)), next=std::max(panel(lap-1),rho*std::sin((.5f-lap)*pi/2));
+  // The panels wind as they rise, so the field is eased to stay an honest underestimate.
+  const float dress=std::min(std::min(here,panel(lap+1)),next)*.65f;
   const float s=sickle(p), moon=smax(s,std::abs(p.z)-.02f-.5f*std::min(std::max(-s,0.f),.09f),.01f)*.8f;
-  return smin(base(p,1),smin(dress,moon,.02f),.008f);
+  return smin(dress,moon,.02f);
 }
 // Gold piping runs up the proud edge of every panel.
 float piping(P p) {
@@ -125,7 +131,7 @@ float lining(P p) {
 
 // The armillary sovereign: a pleated robe under a mantle with broad shoulders and a standing collar,
 // parted down the front, with the rings of an armillary nested in the collar.
-const Lathe robe({{0,.12f},{.25f,.13f},{.245f,.22f},{.228f,.4f},{.208f,.6f},{.195f,.8f},{.19f,.95f},{.17f,1.05f},{.12f,1.1f},{0,1.11f}});
+const Lathe robe({{0,.06f},{.25f,.07f},{.25f,.13f},{.245f,.22f},{.228f,.4f},{.208f,.6f},{.195f,.8f},{.19f,.95f},{.17f,1.05f},{.12f,1.1f},{0,1.11f}});
 const Lathe mantle({{0,.52f},{.2f,.5f},{.258f,.5f},{.264f,.53f},{.25f,.7f},{.236f,.86f},{.242f,.95f},{.264f,1.02f},{.27f,1.06f},{.245f,1.09f},
                     {.218f,1.13f},{.224f,1.17f},{.21f,1.185f},{.17f,1.17f},{.1f,1.13f},{0,1.12f}});
 // Where the mantle parts: negative inside an opening that widens toward the hem, and inside the vee of the collar.
@@ -137,7 +143,7 @@ float sovereign(P p) {
   const float rho=hypot2(p.x,p.z);
   const float pleat=.03f*(1-std::abs(std::cos(4*std::atan2(p.z,p.x))))*smooth(.18f,.3f,p.y)*smooth(1.0f,.9f,p.y);
   const float cloak=smax(mantle.distance(rho,p.y),-parting(p)*.9f,.008f);
-  return smin(base(p,1),smin(robe.distance(rho+pleat,p.y)*.8f,cloak,.006f),.008f);
+  return smin(robe.distance(rho+pleat,p.y)*.8f,cloak,.006f);
 }
 // Gold braid edges the parting and the hem.
 float braid(P p) {
@@ -155,13 +161,21 @@ Field armillary() {
     return std::min(d,ball(p,{0,1.585f,0},.028f));
   };
 }
+// A figure's hull above its deck.
+Field figure(int kind) {
+  return kind==1 ? sentinel() : kind==2 ? Field(steed) : kind==3 ? spire() : kind==4 ? bastion() : kind==5 ? Field(regent) : Field(sovereign);
+}
 }
 
 std::vector<Mould> Orbital::moulds(int kind,int part) {
   if(kind<1 || kind>6) return {};
   if(part==0) {
-    const Field hull=kind==1 ? sentinel() : kind==2 ? Field(steed) : kind==3 ? spire() : kind==4 ? bastion() : kind==5 ? Field(regent) : Field(sovereign);
-    return {{hull,kind==2 ? .013f : kind==1 ? .015f : .017f,.5f}};
+    const float scale=rank[kind];
+    const Field deck=[=](P p) { return base(p,scale); }, hull=figure(kind);
+    // The deck's rounded rim is finer than any grid cell, so it is always turned. The sentinel and the
+    // spire are round all the way up and are turned whole; the others are carved and stand on it.
+    if(kind==1 || kind==3) return {{[=](P p) { return smin(deck(p),hull(p),.008f); },.01f,.5f,true}};
+    return {{deck,.01f,.5f,true,hull},{hull,kind==2 ? .013f : kind==4 ? .011f : .017f,.5f,false,deck}};
   }
   if(part==1) {
     const float scale=rank[kind];
