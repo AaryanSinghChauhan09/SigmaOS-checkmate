@@ -22,7 +22,7 @@ Click a piece, then a highlighted square. Right-drag to orbit the board and scro
 | F | Flip board |
 | R | Reset camera |
 | 1–4 | Switch piece set |
-| B | Show or hide the sidebar |
+| B | Show or hide the moves |
 | Tab | Show or hide the interface |
 | S | Settings |
 | ? | Show shortcuts |

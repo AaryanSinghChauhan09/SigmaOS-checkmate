@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import QtQuick.Shapes
 
 ApplicationWindow {
   id: window
@@ -24,10 +25,11 @@ ApplicationWindow {
   property var setNames: [qsTr("Orbital Orders"),qsTr("Midnight Atelier"),qsTr("Moss & Myth"),qsTr("Candy Kingdom")]
   property var setDescriptions: [qsTr("Across the stars"),qsTr("Wood, ivory & brass"),qsTr("A woodland tale"),qsTr("A little sweetness")]
   property var setColors: ["#d9ad69","#c99b6b","#93a775","#db9eb2"]
+  property color tint: setColors[backend.pieceSet]
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
-  // Tab clears the sidebar and every button away so only the board is left; it comes back with every launch.
+  // Tab clears the footer and the moves away so only the board is left; they come back with every launch.
   property bool chrome: true
-  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible || setMenu.visible
+  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible
   function statusText() {
     if (backend.outcome === "white-wins") return qsTr("White wins by checkmate")
     if (backend.outcome === "black-wins") return qsTr("Black wins by checkmate")
@@ -57,26 +59,54 @@ ApplicationWindow {
       verticalAlignment: Text.AlignVCenter
     }
   }
-  // Quiet toolbar buttons for the sidebar: no outline, a soft fill on hover, and no Material insets so every one stands the same height.
-  component HeaderButton: Button {
-    id: header
+  // A small icon drawn as strokes, from a path in a 24-unit square.
+  component Glyph: Item {
+    id: glyph
+    property string path
+    property color ink: theme.foreground
+    implicitWidth: 16
+    implicitHeight: 16
+    Shape {
+      width: 24; height: 24
+      anchors.centerIn: parent
+      scale: 16 / 24
+      preferredRendererType: Shape.CurveRenderer
+      ShapePath {
+        fillColor: "transparent"
+        strokeColor: glyph.ink
+        strokeWidth: 1.9
+        capStyle: ShapePath.RoundCap
+        joinStyle: ShapePath.RoundJoin
+        PathSvg { path: glyph.path }
+      }
+    }
+  }
+  // A footer action: an icon, with its name and key on hover.
+  component FooterIcon: Button {
+    id: action
+    hoverEnabled: true
+    // Material pads a button unevenly for its label; an icon sits dead centre.
+    leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
+    property string path
+    property string name
+    property string key
     property bool lit: false
-    property color tint: theme.foreground
-    implicitHeight: 34
+    implicitWidth: 30
+    implicitHeight: 26
     topInset: 0; bottomInset: 0; leftInset: 0; rightInset: 0
-    leftPadding: 14; rightPadding: 14
-    font.pixelSize: 13
+    focusPolicy: Qt.NoFocus
+    Accessible.name: name
+    ToolTip.visible: hovered
+    ToolTip.delay: 400
+    ToolTip.text: name + "  ·  " + key
     background: Rectangle {
       radius: theme.radius
-      color: header.down ? Qt.alpha(header.tint,.2) : header.lit ? Qt.alpha(header.tint,header.hovered ? .2 : .13) : header.hovered ? Qt.alpha(theme.foreground,.07) : "transparent"
-      Behavior on color { enabled: !backend.reducedMotion; ColorAnimation { duration: 120 } }
+      color: action.down ? Qt.alpha(window.tint,.26) : action.lit ? Qt.alpha(window.tint,action.hovered ? .22 : .13) : action.hovered ? Qt.alpha(theme.foreground,.09) : "transparent"
+      border.color: action.lit ? Qt.alpha(window.tint,.5) : "transparent"
     }
-    contentItem: Text {
-      text: header.text
-      color: header.lit || header.hovered ? theme.foreground : Qt.alpha(theme.foreground,.72)
-      font: header.font
-      horizontalAlignment: Text.AlignHCenter
-      verticalAlignment: Text.AlignVCenter
+    contentItem: Item {
+      opacity: action.enabled ? 1 : .35
+      Glyph { anchors.centerIn: parent; path: action.path; ink: action.hovered || action.lit ? theme.foreground : Qt.alpha(theme.foreground,.78) }
     }
   }
   Item {
@@ -86,231 +116,141 @@ ApplicationWindow {
     ColumnLayout {
       anchors.fill: parent
       spacing: 0
-      RowLayout {
+      BoardView { id: board; objectName: "board"; Layout.fillWidth: true; Layout.fillHeight: true }
+      // Everything that isn't the board, in one slim line under it.
+      Rectangle {
+        objectName: "footer"
+        visible: window.chrome
         Layout.fillWidth: true
-        Layout.fillHeight: true
-        spacing: 0
-        BoardView { id: board; objectName: "board"; Layout.fillWidth: true; Layout.fillHeight: true }
-        Rectangle { Layout.fillHeight: true; width: 1; color: window.line; visible: backend.sidebar && window.chrome }
-        Rectangle {
-          objectName: "sidebar"
-          visible: backend.sidebar && window.chrome
-          Layout.preferredWidth: window.width < 1100 ? 264 : 298
-          Layout.fillHeight: true
-          color: Qt.alpha(theme.foreground,.018)
-          ColumnLayout {
-            anchors { fill: parent; margins: 22 }
-            spacing: 18
-            // Everything the game is run from lives in this one column: the name, the set, the match, and its buttons.
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: 10
-              Text { text: "♔"; color: window.setColors[backend.pieceSet]; font.pixelSize: 26 }
-              // The name shrinks to the room it has beside its two buttons, whatever serif the desktop gives it; eliding is only the backstop.
-              Text { objectName: "title"; text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 24; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 12; verticalAlignment: Text.AlignVCenter; Layout.fillWidth: true; elide: Text.ElideRight }
-              HeaderButton {
-                id: sidebarButton
-                objectName: "sidebarButton"
-                implicitWidth: 34
-                Accessible.name: backend.sidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar")
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
-                ToolTip.text: Accessible.name + "  ·  B"
-                onClicked: backend.sidebar = !backend.sidebar
-                // A small panel glyph whose side column fills in while the sidebar is showing.
-                contentItem: Item {
-                  Rectangle {
-                    id: panelFrame
-                    anchors.centerIn: parent
-                    width: 16; height: 13; radius: 2
-                    color: "transparent"
-                    border.width: 1.5
-                    border.color: sidebarButton.hovered || backend.sidebar ? theme.foreground : Qt.alpha(theme.foreground,.72)
-                    Rectangle {
-                      anchors { top: parent.top; bottom: parent.bottom; right: parent.right; margins: 1.5 }
-                      width: 5
-                      color: panelFrame.border.color
-                      opacity: backend.sidebar ? 1 : 0
-                      Behavior on opacity { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } }
-                    }
-                  }
-                }
-              }
-              HeaderButton { text: "?"; implicitWidth: 34; font.pixelSize: 14; Accessible.name: qsTr("Keyboard shortcuts"); onClicked: helpDialog.open() }
-            }
-            Button {
-              id: setPicker
-              objectName: "setPicker"
-              Accessible.name: qsTr("Piece set")
-              Accessible.description: window.setNames[backend.pieceSet]
-              Layout.fillWidth: true
-              implicitHeight: 40
-              topInset: 0; bottomInset: 0
-              leftPadding: 12
-              rightPadding: 12
-              onClicked: setMenu.visible ? setMenu.close() : setMenu.open()
-              background: Rectangle {
-                radius: theme.radius
-                color: setMenu.visible ? Qt.alpha(theme.foreground,.07) : setPicker.hovered ? Qt.alpha(theme.foreground,.05) : "transparent"
-                border.color: window.line
-              }
-              contentItem: RowLayout {
-                spacing: 8
-                Text { text: ["◎","♞","❧","♛"][backend.pieceSet]; color: window.setColors[backend.pieceSet]; font.pixelSize: 17; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 20 }
-                Text { text: window.setNames[backend.pieceSet]; color: theme.foreground; font.pixelSize: 13; Layout.fillWidth: true; elide: Text.ElideRight }
-                Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } } }
-              }
-              Popup {
-                id: setMenu
-                objectName: "setMenu"
-                y: setPicker.height + 6
-                x: 0
-                width: setPicker.width
-                padding: 6
-                focus: true
-                // Modal without the dim, so the press that dismisses the menu never lands on the board and moves a piece.
-                modal: true
-                dim: false
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                onOpened: { setList.currentIndex = backend.pieceSet; setList.forceActiveFocus() }
-                background: Rectangle { radius: theme.radius; color: theme.background; border.color: window.line }
-                contentItem: ListView {
-                  id: setList
-                  implicitHeight: contentHeight
-                  interactive: false
-                  spacing: 2
-                  model: 4
-                  keyNavigationEnabled: true
-                  highlightFollowsCurrentItem: false
-                  Keys.onReturnPressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                  Keys.onEnterPressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                  Keys.onSpacePressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                  delegate: ItemDelegate {
-                    id: setButton
-                    required property int index
-                    width: ListView.view.width
-                    height: 54
-                    objectName: "set-" + index
-                    Accessible.name: window.setNames[index]
-                    onClicked: { backend.pieceSet = index; setMenu.close() }
-                    background: Rectangle {
-                      radius: theme.radius
-                      color: backend.pieceSet === setButton.index ? Qt.alpha(window.setColors[setButton.index],.1) : setButton.hovered || setButton.ListView.isCurrentItem && setList.activeFocus ? Qt.alpha(theme.foreground,.05) : "transparent"
-                    }
-                    contentItem: RowLayout {
-                      spacing: 12
-                      Text { text: ["◎","♞","❧","♛"][setButton.index]; color: window.setColors[setButton.index]; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 28; Layout.leftMargin: 2 }
-                      ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
-                        Text { text: window.setNames[setButton.index]; color: theme.foreground; font.pixelSize: 12; font.bold: true; Layout.fillWidth: true }
-                        Text { text: window.setDescriptions[setButton.index]; color: window.muted; font.pixelSize: 10; Layout.fillWidth: true }
-                      }
-                      Text { text: (setButton.index + 1).toLocaleString(Qt.locale(),'f',0); color: window.muted; font.pixelSize: 10; visible: backend.pieceSet !== setButton.index }
-                      Text { text: "✓"; color: window.setColors[setButton.index]; visible: backend.pieceSet === setButton.index; Layout.rightMargin: 4 }
-                    }
-                  }
-                }
+        Layout.preferredHeight: 42
+        color: theme.background
+        Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: window.line }
+        RowLayout {
+          anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+          spacing: 12
+          // The name is also the way to the shortcuts.
+          AbstractButton {
+            id: wordmark
+            hoverEnabled: true
+            objectName: "wordmark"
+            implicitWidth: mark.implicitWidth + 12
+            implicitHeight: 26
+            focusPolicy: Qt.NoFocus
+            Accessible.name: qsTr("Keyboard shortcuts")
+            ToolTip.visible: hovered
+            ToolTip.delay: 400
+            ToolTip.text: qsTr("Keyboard shortcuts") + "  ·  ?"
+            onClicked: helpDialog.open()
+            background: Rectangle { radius: theme.radius; color: wordmark.down ? Qt.alpha(theme.foreground,.16) : wordmark.hovered ? Qt.alpha(theme.foreground,.09) : "transparent" }
+            contentItem: Item {
+              Row {
+                id: mark
+                anchors.centerIn: parent
+                spacing: 7
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "♔"; color: window.tint; font.pixelSize: 17 }
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 17 }
               }
             }
-            Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
-            RowLayout {
-              Layout.fillWidth: true
-              Text { text: backend.computer ? qsTr("VS COMPUTER") : qsTr("TWO PLAYERS"); font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 2; color: window.muted; Layout.fillWidth: true }
-              Text { text: "●"; color: window.setColors[backend.pieceSet]; font.pixelSize: 9 }
-            }
-            Text { text: backend.computer ? window.difficultyNames[backend.difficulty] : qsTr("One board. Two minds."); color: theme.foreground; font.family: "serif"; font.pixelSize: 23; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            Repeater {
-              model: [false,true]
-              Rectangle {
-                required property bool modelData
-                Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                color: backend.whiteTurn === modelData && !backend.finished ? Qt.alpha(theme.accent,.08) : "transparent"
-                radius: theme.radius
-                border.color: backend.whiteTurn === modelData && !backend.finished ? Qt.alpha(theme.accent,.45) : window.line
-                RowLayout {
-                  anchors { fill: parent; margins: 12 }
-                  spacing: 12
-                  Text { text: modelData ? "♙" : "♟"; font.pixelSize: 29; color: theme.foreground }
-                  ColumnLayout {
-                    spacing: 3
-                    Text { text: backend.computer ? (backend.humanWhite === modelData ? qsTr("You") : qsTr("Computer")) : (modelData ? qsTr("Player 1") : qsTr("Player 2")); color: theme.foreground; font.pixelSize: 14 }
-                    Text { text: modelData ? qsTr("White") : qsTr("Black"); color: window.muted; font.pixelSize: 11 }
-                  }
-                  Item { Layout.fillWidth: true }
-                  Text { text: backend.whiteTurn === modelData && !backend.finished ? "●" : ""; color: theme.accent; font.pixelSize: 10 }
-                }
-              }
-            }
-            Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
-            Text { objectName: "status"; text: window.statusText(); color: backend.checked ? theme.colors.red : theme.foreground; font.pixelSize: 17; font.family: "serif"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Text { text: qsTr("MOVE HISTORY"); color: window.muted; font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 1.8 }
-            ListView {
-              id: history
-              objectName: "history"
-              Layout.fillWidth: true
-              Layout.fillHeight: true
-              clip: true
-              model: Math.ceil(backend.moves.length / 2)
-              spacing: 3
-              ScrollBar.vertical: ScrollBar { }
-              onCountChanged: Qt.callLater(positionViewAtEnd)
-              delegate: Rectangle {
-                required property int index
-                width: history.width
-                height: 32
-                color: index % 2 === 0 ? Qt.alpha(theme.foreground,.035) : "transparent"
-                RowLayout {
-                  anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
-                  Text { text: { translator.language; return (index + 1).toLocaleString(Qt.locale(),'f',0) + "." } color: window.muted; Layout.preferredWidth: 30; font.pixelSize: 12 }
-                  Text { text: backend.moves[index * 2] || ""; color: theme.foreground; Layout.fillWidth: true; font.pixelSize: 13 }
-                  Text { text: backend.moves[index * 2 + 1] || "·"; color: theme.foreground; Layout.preferredWidth: 66; font.pixelSize: 13 }
-                }
-              }
-              Text { anchors { top: parent.top; left: parent.left } visible: history.count === 0; text: qsTr("Every great game starts\nwith a single move."); color: window.muted; font.pixelSize: 12; lineHeight: 1.6 }
-            }
-            FlatButton { objectName: "undoButton"; text: qsTr("↶  Undo move"); Layout.fillWidth: true; enabled: backend.canUndo; onClicked: backend.undo() }
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: 8
-              HeaderButton { objectName: "newGameButton"; text: qsTr("+  New game"); lit: true; tint: window.setColors[backend.pieceSet]; Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 38; onClicked: newGameDialog.open() }
-              HeaderButton { objectName: "settingsButton"; text: qsTr("Settings"); Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 38; onClicked: settingsDialog.open() }
-            }
-            Text { text: backend.saveHealthy ? qsTr("Saved automatically · No time limit") : qsTr("Game is not being saved"); font.pixelSize: 10; color: window.muted; Layout.alignment: Qt.AlignHCenter }
           }
+          // The four sets, each by its own sign, with a ring round the one on the board.
+          RowLayout {
+            spacing: 4
+            Repeater {
+              model: 4
+              AbstractButton {
+                id: swatch
+                hoverEnabled: true
+                required property int index
+                objectName: "set-" + index
+                implicitWidth: 26
+                implicitHeight: 26
+                focusPolicy: Qt.NoFocus
+                Accessible.name: window.setNames[index]
+                ToolTip.visible: hovered
+                ToolTip.delay: 400
+                ToolTip.text: { translator.language; return window.setNames[index] + "  ·  " + window.setDescriptions[index] + "  ·  " + (index + 1).toLocaleString(Qt.locale(),'f',0) }
+                onClicked: backend.pieceSet = index
+                background: Rectangle {
+                  radius: theme.radius
+                  color: swatch.down ? Qt.alpha(window.setColors[swatch.index],.26) : swatch.hovered ? Qt.alpha(theme.foreground,.09) : "transparent"
+                  border.color: backend.pieceSet === swatch.index ? window.setColors[swatch.index] : "transparent"
+                  border.width: 1.5
+                }
+                contentItem: Text {
+                  text: ["◎","♞","❧","♛"][swatch.index]
+                  color: window.setColors[swatch.index]
+                  opacity: backend.pieceSet === swatch.index || swatch.hovered ? 1 : .7
+                  font.pixelSize: 15
+                  horizontalAlignment: Text.AlignHCenter
+                  verticalAlignment: Text.AlignVCenter
+                }
+              }
+            }
+          }
+        }
+        // What the game has to say for itself, dead centre: who is playing, and whose move it is.
+        Row {
+          anchors.centerIn: parent
+          spacing: 10
+          Text { anchors.verticalCenter: parent.verticalCenter; text: backend.computer ? qsTr("Computer") + "  ·  " + window.difficultyNames[backend.difficulty] : qsTr("Two players"); color: window.muted; font.pixelSize: 12 }
+          Text { anchors.verticalCenter: parent.verticalCenter; objectName: "status"; text: window.statusText(); color: backend.checked ? theme.colors.red : theme.foreground; font.pixelSize: 12 }
+          Text { anchors.verticalCenter: parent.verticalCenter; visible: !backend.saveHealthy; text: qsTr("Game is not being saved"); color: theme.colors.red; font.pixelSize: 12 }
+        }
+        RowLayout {
+          anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+          spacing: 2
+          FooterIcon { objectName: "movesButton"; name: qsTr("Moves"); key: "B"; path: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"; lit: backend.movesOpen; onClicked: backend.movesOpen = !backend.movesOpen }
+          FooterIcon { objectName: "undoButton"; name: qsTr("Undo"); key: "Ctrl+Z"; path: "M8 5L3.5 9.5L8 14M3.5 9.5H14a5 5 0 0 1 0 10h-3"; enabled: backend.canUndo; onClicked: backend.undo() }
+          FooterIcon { objectName: "settingsButton"; name: qsTr("Settings"); key: "S"; path: "M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5v5M9 14.5v5"; onClicked: settingsDialog.open() }
+          FooterIcon { objectName: "newGameButton"; name: qsTr("New game"); key: "N"; path: "M12 5v14M5 12h14"; lit: true; Layout.leftMargin: 4; Layout.rightMargin: 4; onClicked: newGameDialog.open() }
         }
       }
     }
-    HeaderButton {
-      id: showSidebar
-      objectName: "showSidebar"
-      visible: !backend.sidebar && window.chrome
-      anchors { top: parent.top; right: parent.right; margins: 14 }
-      implicitWidth: 34
-      Accessible.name: qsTr("Show sidebar")
-      ToolTip.visible: hovered
-      ToolTip.delay: 600
-      ToolTip.text: Accessible.name + "  ·  B"
-      onClicked: backend.sidebar = true
-      background: Rectangle {
-        radius: theme.radius
-        color: showSidebar.hovered ? Qt.alpha(theme.background,.9) : Qt.alpha(theme.background,.6)
-        border.color: window.line
-      }
-      contentItem: Item {
-        Rectangle {
-          anchors.centerIn: parent
-          width: 16; height: 13; radius: 2
-          color: "transparent"
-          border.width: 1.5
-          border.color: theme.foreground
+    // The moves so far, laid over a corner of the board when asked for.
+    Rectangle {
+      objectName: "moves"
+      visible: backend.movesOpen && window.chrome
+      anchors { top: parent.top; right: parent.right; margins: 16 }
+      width: 236
+      height: Math.min(parent.height - 90, 58 + Math.max(2,history.count) * 35)
+      radius: theme.radius
+      color: Qt.alpha(theme.background,.9)
+      border.color: window.line
+      // A press on the list never falls through to the board beneath it.
+      MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+      ColumnLayout {
+        anchors { fill: parent; margins: 14 }
+        spacing: 10
+        Text { text: qsTr("MOVE HISTORY"); color: window.muted; font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 1.8 }
+        ListView {
+          id: history
+          objectName: "history"
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          clip: true
+          model: Math.ceil(backend.moves.length / 2)
+          spacing: 3
+          ScrollBar.vertical: ScrollBar { }
+          onCountChanged: Qt.callLater(positionViewAtEnd)
+          delegate: Rectangle {
+            required property int index
+            width: history.width
+            height: 32
+            color: index % 2 === 0 ? Qt.alpha(theme.foreground,.035) : "transparent"
+            RowLayout {
+              anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+              Text { text: { translator.language; return (index + 1).toLocaleString(Qt.locale(),'f',0) + "." } color: window.muted; Layout.preferredWidth: 30; font.pixelSize: 12 }
+              Text { text: backend.moves[index * 2] || ""; color: theme.foreground; Layout.fillWidth: true; font.pixelSize: 13 }
+              Text { text: backend.moves[index * 2 + 1] || "·"; color: theme.foreground; Layout.preferredWidth: 66; font.pixelSize: 13 }
+            }
+          }
+          Text { anchors { top: parent.top; left: parent.left } visible: history.count === 0; text: qsTr("Every great game starts\nwith a single move."); color: window.muted; font.pixelSize: 12; lineHeight: 1.6 }
         }
       }
     }
     Rectangle {
       visible: backend.error.length > 0
-      anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 16 }
+      anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 16; bottomMargin: window.chrome ? 58 : 16 }
       height: errorRow.implicitHeight + 28
       color: theme.background
       border.color: theme.colors.red
@@ -397,7 +337,7 @@ ApplicationWindow {
     Material.roundedScale: theme.radius
     contentItem: Label {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the sidebar\nTab  ·  Show or hide the interface\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
+      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the moves\nTab  ·  Show or hide the interface\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
       wrapMode: Text.WordWrap
       lineHeight: 1.4
     }
@@ -447,7 +387,7 @@ ApplicationWindow {
   Shortcut { sequence: "2"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 1 }
   Shortcut { sequence: "3"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 2 }
   Shortcut { sequence: "4"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 3 }
-  Shortcut { sequence: "B"; enabled: !window.modalOpen; onActivated: backend.sidebar = !backend.sidebar }
+  Shortcut { sequence: "B"; enabled: !window.modalOpen; onActivated: backend.movesOpen = !backend.movesOpen }
   Shortcut { sequence: "Tab"; enabled: !window.modalOpen; onActivated: window.chrome = !window.chrome }
   Shortcut { sequence: "R"; enabled: !window.modalOpen; onActivated: board.resetCamera() }
   Shortcut { sequence: "Escape"; enabled: !window.modalOpen; onActivated: backend.cancelSelection() }

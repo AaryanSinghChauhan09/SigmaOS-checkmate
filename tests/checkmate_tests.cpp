@@ -446,7 +446,7 @@ private slots:
             game.newGame(false,1);
             QVERIFY(game.move(12,28));
             QVERIFY(game.move(52,36));
-            game.setPieceSet(3); game.setReducedMotion(true); game.setSidebar(false);
+            game.setPieceSet(3); game.setReducedMotion(true); game.setMovesOpen(true);
             fen = game.fen();
         }
         Backend restored(dir.filePath("game.json"));
@@ -454,8 +454,8 @@ private slots:
         QCOMPARE(restored.moves(),QStringList({"e4","e5"}));
         QCOMPARE(restored.pieceSet(),3);
         QVERIFY(restored.reducedMotion());
-        QVERIFY(!restored.sidebar());
-        QVERIFY(Backend(dir.filePath("fresh.json")).sidebar());
+        QVERIFY(restored.movesOpen());
+        QVERIFY(!Backend(dir.filePath("fresh.json")).movesOpen());
         restored.undo();
         QCOMPARE(restored.moves().size(),1);
     }
@@ -855,93 +855,75 @@ private slots:
             QTest::qWait(100);
         }
         {
-            // The piece set is picked from a dropdown in the sidebar.
-            auto *picker=window->findChild<QQuickItem *>("setPicker");
-            auto *menu=window->findChild<QObject *>("setMenu");
-            QVERIFY(picker && menu);
-            backend.setPieceSet(0);
-            QTest::mouseClick(window,Qt::LeftButton,{},picker->mapToScene(QPointF(picker->width()/2,picker->height()/2)).toPoint());
-            QTRY_VERIFY(menu->property("opened").toBool());
+            // Everything that isn't the board is in one slim footer under it.
+            auto *footer=window->findChild<QQuickItem *>("footer");
+            QVERIFY(footer && footer->isVisible());
+            QCOMPARE(footer->height(),42.0);
+            QCOMPARE(board->width(),qreal(window->width()));
+            QCOMPARE(board->height(),qreal(window->height())-42);
             // Delegates live only in the visual tree, so walk it rather than the object tree.
-            std::function<QQuickItem *(QQuickItem *)> find=[&](QQuickItem *item) -> QQuickItem * {
-                if (item->objectName()=="set-3") return item;
-                for (auto *child : item->childItems()) if (auto *hit=find(child)) return hit;
+            std::function<QQuickItem *(QQuickItem *,const QString &)> find=[&](QQuickItem *item,const QString &name) -> QQuickItem * {
+                if (item->objectName()==name) return item;
+                for (auto *child : item->childItems()) if (auto *hit=find(child,name)) return hit;
                 return nullptr;
             };
-            auto *candy=find(window->contentItem());
-            QVERIFY(candy);
-            QTest::mouseClick(window,Qt::LeftButton,{},candy->mapToScene(QPointF(candy->width()/2,candy->height()/2)).toPoint());
+            auto press=[&](QQuickItem *item) { QTest::mouseClick(window,Qt::LeftButton,{},item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint()); };
+            for (const char *name : {"wordmark","set-0","set-3","movesButton","undoButton","settingsButton","newGameButton","status"}) {
+                auto *control=find(window->contentItem(),name);
+                QVERIFY2(control && control->isVisible(),name);
+                const QPointF corner=control->mapToItem(footer,QPointF(0,0));
+                QVERIFY2(corner.x()>=0 && corner.y()>=0 && corner.x()+control->width()<=footer->width() && corner.y()+control->height()<=footer->height(),name);
+            }
+            // The four sets are picked from their signs.
+            backend.setPieceSet(0);
+            press(find(window->contentItem(),"set-3"));
             QCOMPARE(backend.pieceSet(),3);
-            QTRY_VERIFY(!menu->property("visible").toBool());
-            backend.setPieceSet(0);
-            // The keyboard works inside the open menu.
-            const QPoint pickerCenter=picker->mapToScene(QPointF(picker->width()/2,picker->height()/2)).toPoint();
-            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
-            QTRY_VERIFY(menu->property("opened").toBool());
-            QTest::keyClick(window,Qt::Key_Down);
-            QTest::keyClick(window,Qt::Key_Return);
-            QCOMPARE(backend.pieceSet(),1);
-            QTRY_VERIFY(!menu->property("visible").toBool());
-            backend.setPieceSet(0);
-            // The click that dismisses the menu never reaches the board, even over a legal destination.
+            press(find(window->contentItem(),"set-0"));
+            QCOMPARE(backend.pieceSet(),0);
+            // The name opens the shortcuts, and the plus a new game.
+            press(find(window->contentItem(),"wordmark"));
+            QTRY_VERIFY(help->property("opened").toBool());
+            QTest::keyClick(window,Qt::Key_Escape);
+            QTRY_VERIFY(!help->property("visible").toBool());
+            press(find(window->contentItem(),"newGameButton"));
+            QTRY_VERIFY(dialog->property("opened").toBool());
+            QTest::keyClick(window,Qt::Key_Escape);
+            QTRY_VERIFY(!dialog->property("visible").toBool());
+            // The moves stay out of the way until asked for, then lie over a corner of the board without moving it.
+            auto *moves=window->findChild<QQuickItem *>("moves");
+            QVERIFY(moves && !moves->isVisible());
+            QVERIFY(!backend.movesOpen());
+            press(find(window->contentItem(),"movesButton"));
+            QVERIFY(backend.movesOpen());
+            QTRY_VERIFY(moves->isVisible());
+            QCOMPARE(board->width(),qreal(window->width()));
+            const QPointF corner=moves->mapToItem(board,QPointF(0,0));
+            QVERIFY(corner.x()>=0 && corner.y()>=0 && corner.x()+moves->width()<=board->width() && corner.y()+moves->height()<=board->height());
+            // A press on the moves never reaches the board beneath them.
             backend.selectSquare(12);
             QCOMPARE(backend.selected(),12);
-            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
-            QTRY_VERIFY(menu->property("opened").toBool());
-            for (const QPointF spot : {QPointF(.5,.5),QPointF(.5,.62),QPointF(.45,.7)})
-                QTest::mouseClick(window,Qt::LeftButton,{},board->mapToScene(QPointF(board->width()*spot.x(),board->height()*spot.y())).toPoint());
-            QTRY_VERIFY(!menu->property("visible").toBool());
+            press(moves);
+            QCOMPARE(backend.selected(),12);
             QVERIFY(backend.moves().isEmpty());
             backend.cancelSelection();
-            // B hides the sidebar and hands its room to the board, and brings it back.
-            auto *sidebar=window->findChild<QQuickItem *>("sidebar");
-            QVERIFY(sidebar && sidebar->isVisible());
-            const qreal narrow=board->width();
+            // B puts them away and brings them back.
             QTest::keyClick(window,Qt::Key_B);
-            QVERIFY(!backend.sidebar());
-            QTRY_VERIFY(board->width()>narrow+200);
+            QVERIFY(!backend.movesOpen());
+            QTRY_VERIFY(!moves->isVisible());
             QTest::keyClick(window,Qt::Key_B);
-            QVERIFY(backend.sidebar());
-            QTRY_COMPARE(board->width(),narrow);
-            // With the sidebar put away, a button on the board brings it back.
-            auto *show=window->findChild<QQuickItem *>("showSidebar");
-            QVERIFY(show && !show->isVisible());
-            QTest::keyClick(window,Qt::Key_B);
-            QTRY_VERIFY(show->isVisible());
-            QTest::mouseClick(window,Qt::LeftButton,{},show->mapToScene(QPointF(show->width()/2,show->height()/2)).toPoint());
-            QVERIFY(backend.sidebar());
-            QTRY_VERIFY(sidebar->isVisible() && !show->isVisible());
-            QTRY_COMPARE(board->width(),narrow);
-            // Every control is in the sidebar, so the board has the window's full height.
-            QCOMPARE(board->height(),qreal(window->height()));
-            for (const char *name : {"newGameButton","settingsButton","undoButton","setPicker","sidebarButton"}) {
-                auto *control=window->findChild<QQuickItem *>(name);
-                QVERIFY2(control && control->isVisible(),name);
-                const QPointF corner=control->mapToItem(sidebar,QPointF(0,0));
-                QVERIFY2(corner.x()>=0 && corner.y()>=0 && corner.x()+control->width()<=sidebar->width() && corner.y()+control->height()<=sidebar->height(),name);
-            }
-            {
-                // In a narrow window the sidebar slims down, and its name still clears the buttons beside it.
-                const QSize wide=window->size();
-                window->resize(1000,wide.height());
-                auto *toggle=window->findChild<QQuickItem *>("sidebarButton");
-                auto *title=window->findChild<QQuickItem *>("title");
-                QVERIFY(toggle && title);
-                QTRY_COMPARE(sidebar->width(),264.0);
-                QTRY_VERIFY(title->mapToItem(sidebar,QPointF(title->property("contentWidth").toReal(),0)).x()<=toggle->mapToItem(sidebar,QPointF(0,0)).x());
-                QVERIFY(!title->property("truncated").toBool());
-                window->resize(wide);
-                QTRY_COMPARE(board->width(),narrow);
-            }
-            // Tab clears the sidebar away for a bare board, and brings it back.
+            QTRY_VERIFY(moves->isVisible());
+            // Tab clears the footer and the moves away for a bare board, and brings them back.
             QTest::keyClick(window,Qt::Key_Tab);
-            QTRY_VERIFY(!sidebar->isVisible());
-            QVERIFY(!show->isVisible());
-            QVERIFY(backend.sidebar());
-            QTRY_COMPARE(board->width(),qreal(window->width()));
+            QTRY_VERIFY(!footer->isVisible());
+            QVERIFY(!moves->isVisible());
+            QVERIFY(backend.movesOpen());
+            QTRY_COMPARE(board->height(),qreal(window->height()));
             QTest::keyClick(window,Qt::Key_Tab);
-            QTRY_VERIFY(sidebar->isVisible());
-            QTRY_COMPARE(board->width(),narrow);
+            QTRY_VERIFY(footer->isVisible());
+            QVERIFY(moves->isVisible());
+            QTRY_COMPARE(board->height(),qreal(window->height())-42);
+            QTest::keyClick(window,Qt::Key_B);
+            QVERIFY(!backend.movesOpen());
         }
         board->setProperty("cursorSquare",28);
         QTest::keyClick(window,Qt::Key_F);
