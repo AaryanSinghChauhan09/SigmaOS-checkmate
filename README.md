@@ -50,4 +50,4 @@ build/checkmate open
 
 ## License
 
-MIT. The pieces are generated from original geometry in the binary; nothing is downloaded. The theme, translation and build scaffolding follow the Omarchy app templates by David Heinemeier Hansson.
+MIT.
