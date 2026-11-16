@@ -14,6 +14,8 @@ Use case: stylized-concept. Asset: background texture behind a real-time 3D ches
 
 Use case: stylized-concept. A cinematic wide 3:2 background behind a real-time chessboard: an old European woodworker’s atelier at dusk, walnut paneling, an arched window with blue evening light, an amber lamp and blurred tools around the outer edges. Warm brown and muted brass, softly defocused miniature photography. Keep the central and lower two thirds quiet and dark for the separately rendered board. No board, pieces, people, text or logos.
 
+The generated image ended in a hard line a third of the way down over a flat red-brown wash, so it was reworked by hand: the room now stands on a glossy walnut tabletop that mirrors the window, carved panel, lamp and shelves and fades into ink-blue darkness under the board, with the palette cooled toward midnight.
+
 ## Candy
 
 Use case: stylized-concept. A wide 3:2 confectionery garden in pastel coral, cream and lilac, with distant meringue hills, candy-glass arches, curled sugar ribbons and delicate flowers around the upper and outer edges. Warm morning light, handmade miniature diorama photography and soft depth of field. Keep the central and lower two thirds quiet pale rose and mauve for the separately rendered board. No board, pieces, people, characters, text or logos.
