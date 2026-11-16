@@ -25,7 +25,7 @@
 int main(int argc, char *argv[]) {
     const std::string command = argc > 1 ? argv[1] : "open";
     if (command == "--help" || command == "--version") {
-      std::cout << (command == "--version" ? "Checkmate 0.1.0\n" : "Checkmate — 3D chess\nUsage: checkmate [open | inspect | export | legal [FEN] | --help | --version]\nHeadless commands accept --json. export prints PGN to stdout.\n");
+      std::cout << (command == "--version" ? "Checkmate 0.1.1\n" : "Checkmate — 3D chess\nUsage: checkmate [open | inspect | export | legal [FEN] | --help | --version]\nHeadless commands accept --json. export prints PGN to stdout.\n");
       return 0;
     }
     if (command == "inspect" || command == "export" || command == "legal") return runCli(argc,argv);
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     qmlRegisterType<SculptGeometry>("Checkmate", 1, 0, "SculptGeometry");
     qmlRegisterType<SurfaceTexture>("Checkmate",1,0,"SurfaceTexture");
     app.setApplicationName("checkmate");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion("0.1.1");
 
     // Matches the window to checkmate.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon. The compiled-in copy covers
