@@ -106,8 +106,8 @@ ApplicationWindow {
               Layout.fillWidth: true
               spacing: 10
               Text { text: "♔"; color: window.setColors[backend.pieceSet]; font.pixelSize: 26 }
-              // The narrower sidebar has room for a smaller name beside its two buttons; eliding is only the backstop.
-              Text { objectName: "title"; text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: window.width < 1100 ? 20 : 24; Layout.fillWidth: true; elide: Text.ElideRight }
+              // The name shrinks to the room it has beside its two buttons, whatever serif the desktop gives it; eliding is only the backstop.
+              Text { objectName: "title"; text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 24; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 12; verticalAlignment: Text.AlignVCenter; Layout.fillWidth: true; elide: Text.ElideRight }
               HeaderButton {
                 id: sidebarButton
                 objectName: "sidebarButton"
