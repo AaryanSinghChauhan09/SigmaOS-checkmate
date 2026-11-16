@@ -57,6 +57,10 @@ Item {
     return needed
   }
   function resetCamera() {
+    // Whole turns are dropped first, so the way home is never more than half a turn however often the board was flipped.
+    rotationBehavior.enabled = false
+    manualAzimuth -= 360 * Math.round(manualAzimuth / 360)
+    rotationBehavior.enabled = Qt.binding(function() { return board.motion && !orbit.dragging })
     manualAzimuth = 0
     elevation = Qt.binding(function() { return board.homeElevation() })
     distance = Qt.binding(function() { return board.homeDistance() })
@@ -71,8 +75,8 @@ Item {
     let y = Math.max(0, Math.min(7, Math.floor(cursorSquare / 8) + rankStep))
     cursorSquare = y * 8 + x
   }
-  Behavior on azimuth { id: rotationBehavior; enabled: board.motion && !orbit.dragging; NumberAnimation { id: cameraTurn; duration: 650; easing.type: Easing.InOutCubic } }
-  Behavior on seat { id: seatBehavior; enabled: board.motion; NumberAnimation { id: seatTurn; duration: 650; easing.type: Easing.InOutCubic } }
+  Behavior on azimuth { id: rotationBehavior; enabled: board.motion && !orbit.dragging; NumberAnimation { duration: 650; easing.type: Easing.InOutCubic } }
+  Behavior on seat { id: seatBehavior; enabled: board.motion; NumberAnimation { duration: 650; easing.type: Easing.InOutCubic } }
   onMotionChanged: {
     if (!motion) {
       rotationBehavior.enabled = false
@@ -224,19 +228,14 @@ Item {
         materials: PrincipledMaterial { baseColor: board.accents[board.design]; opacity: .23; lighting: PrincipledMaterial.NoLighting }
       }
     }
-    Repeater3D {
-      model: 32
-      Model {
-        required property int index
-        property var record: backend.pieces[index]
-        source: "#Cylinder"
-        visible: backend.checked && record.alive && record.kind === 6 && record.white === backend.whiteTurn
-        x: record.square % 8 - 3.5
-        z: 3.5 - Math.floor(record.square / 8)
-        y: .10
-        scale: Qt.vector3d(.009,.00005,.009)
-        materials: PrincipledMaterial { baseColor: "#ed7369"; opacity: board.checkGlow; lighting: PrincipledMaterial.NoLighting }
-      }
+    Model {
+      source: "#Cylinder"
+      visible: backend.checkSquare >= 0
+      x: backend.checkSquare % 8 - 3.5
+      z: 3.5 - Math.floor(backend.checkSquare / 8)
+      y: .10
+      scale: Qt.vector3d(.009,.00005,.009)
+      materials: PrincipledMaterial { baseColor: "#ed7369"; opacity: board.checkGlow; lighting: PrincipledMaterial.NoLighting }
     }
   }
   Repeater {

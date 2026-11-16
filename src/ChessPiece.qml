@@ -60,6 +60,12 @@ Node {
   ]
   readonly property var manner: manners[design]
   property int square: record.square
+  // The figure shown. A promoting pawn stays a pawn until it lands, then becomes what it was promoted to.
+  property int kind: record.kind
+  property int shownKind: 1
+  onKindChanged: Qt.callLater(function() { if (!leap.running) piece.shownKind = piece.kind })
+  // A figure taken off the board is not drawn at all, rather than drawn at no size.
+  visible: presence > 0
   // Where the figure stands. It follows `square` by hand so a journey is measured before the slide starts.
   property int place: 0
   property int travel: 360
@@ -182,7 +188,7 @@ Node {
   onSelectedChanged: if (selected && motion && ready) { skip.stop(); glance.stop(); perk.restart() }
   // A new set starts from rest rather than finishing the last one's gesture.
   onDesignChanged: compose()
-  Component.onCompleted: { place = square; presence = alive ? 1 : 0; ready = true }
+  Component.onCompleted: { place = square; shownKind = kind; presence = alive ? 1 : 0; ready = true }
   function compose() {
     leap.stop(); perk.stop(); glance.stop(); skip.stop()
     lift = 0; stretch = 1; lean = 0; wiggle = 0
@@ -198,6 +204,7 @@ Node {
   SequentialAnimation {
     id: leap
     objectName: "leap"
+    onRunningChanged: if (!running) piece.shownKind = piece.kind
     property real height: .2
     NumberAnimation { target: piece; property: "stretch"; to: piece.manner.crouch; duration: piece.manner.windup; easing.type: Easing.OutQuad }
     ParallelAnimation {
@@ -268,7 +275,7 @@ Node {
     objectName: "piece-" + piece.pieceId
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
-    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; tone: piece.record.white ? 0 : 1; part: 0 }
+    geometry: sculptures.geometry(piece.design,piece.shownKind,0,piece.record.white ? 0 : 1)
     // Ceramic or gunmetal, polished wood, painted carving, boiled sugar.
     materials: PrincipledMaterial {
       baseColorMap: piece.woodland ? null : piece.design === 1 && piece.record.white ? piece.paleGrain : piece.grain
@@ -292,7 +299,7 @@ Node {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
     visible: !piece.woodland
-    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 1 }
+    geometry: sculptures.geometry(piece.design,piece.shownKind,1,0)
     materials: PrincipledMaterial {
       baseColor: piece.trimColor
       vertexColorsEnabled: true
@@ -307,7 +314,7 @@ Node {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
     visible: !piece.woodland
-    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 2 }
+    geometry: sculptures.geometry(piece.design,piece.shownKind,2,0)
     materials: PrincipledMaterial {
       baseColor: piece.design === 3 ? (piece.record.white ? "#5a2238" : "#2c1636") : piece.design === 0 ? "#10151c" : "#1b1a20"
       vertexColorsEnabled: true
@@ -320,7 +327,7 @@ Node {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
     visible: !piece.woodland
-    geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; part: 3 }
+    geometry: sculptures.geometry(piece.design,piece.shownKind,3,0)
     materials: PrincipledMaterial {
       baseColor: piece.secondaryColor
       vertexColorsEnabled: true

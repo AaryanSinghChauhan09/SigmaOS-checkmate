@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 DBus Test Quick3D Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 Test Quick3D Concurrent)
 
 # Everything but main.cpp, shared by the app and the tests, so each source
 # compiles once and a new file in src/ needs no line here.
@@ -18,7 +18,7 @@ list(REMOVE_ITEM checkmate_sources ${CMAKE_SOURCE_DIR}/src/main.cpp)
 add_library(checkmate_core STATIC ${checkmate_sources})
 target_include_directories(checkmate_core PUBLIC src)
 target_link_libraries(checkmate_core PUBLIC
-  Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Quick3D Qt6::Concurrent)
+  Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Quick3D Qt6::Concurrent)
 target_compile_options(checkmate_core PUBLIC -Wall -Wextra)
 
 # The version comes from the release, never from the code: a tag's tarball

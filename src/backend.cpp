@@ -22,6 +22,8 @@ QString adjudicate(const Chess::Position &p, const std::vector<Chess::Move> &leg
 }
 
 Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_savePath(savePath) {
+  m_reply.setSingleShot(true);
+  connect(&m_reply,&QTimer::timeout,this,&Backend::scheduleComputer);
   if (m_savePath.isEmpty()) m_savePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/game.json";
   m_repetitions[position().key()] = 1;
   if (m_savePath != ":memory:") {
@@ -38,6 +40,11 @@ Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_
   QTimer::singleShot(0, this, &Backend::scheduleComputer);
 }
 Backend::~Backend() { cancelComputer(); }
+int Backend::checkSquare() const {
+  if (!checked()) return -1;
+  for (int s = 0; s < 64; ++s) if (position().board[s].kind == Chess::King && position().board[s].white == position().white) return s;
+  return -1;
+}
 QVariantList Backend::targets() const {
   QVariantList result;
   for (auto move : m_legal) if (move.from == m_selected && !result.contains(move.to)) result.append(move.to);
@@ -91,10 +98,11 @@ void Backend::apply(Chess::Move move) {
   refresh();
   emit moved(piece.id,piece.kind == Chess::Knight,capture);
   save();
-  QTimer::singleShot(m_reducedMotion ? 0 : 420,this,&Backend::scheduleComputer);
+  m_reply.start(m_reducedMotion ? 0 : 420);
 }
 void Backend::cancelComputer() {
   ++m_generation;
+  m_reply.stop();
   if (m_cancel) m_cancel->store(true);
   m_thinking = false;
 }
@@ -184,7 +192,7 @@ void Backend::restore() {
     m_repetitions.clear(); m_repetitions[position().key()] = 1;
     m_error = tr("The saved game is damaged. Start a new game to replace it.");
   };
-  if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 5000) { invalid(); return; }
+  if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 20000) { invalid(); return; }
   for (auto value : data["moves"].toArray()) {
     auto entry = value.toArray();
     if (entry.size() != 3) { invalid(); return; }

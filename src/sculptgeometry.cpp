@@ -4,6 +4,7 @@
 #include <QVector2D>
 #include <QVector3D>
 #include <QVector4D>
+#include <QQmlEngine>
 #include <QtConcurrent>
 #include <algorithm>
 #include <map>
@@ -15,6 +16,25 @@ void SculptGeometry::setKind(int value) { const bool moved=m_kind != value; m_ki
 void SculptGeometry::setDesign(int value) { const bool moved=m_design != value; m_design=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
 void SculptGeometry::setPart(int value) { const bool moved=m_part != value; m_part=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
 void SculptGeometry::setTone(int value) { const bool moved=m_tone != value; m_tone=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
+void SculptGeometry::shape(int design,int kind,int part,int tone) {
+  m_design=design; m_kind=kind; m_part=part; m_tone=tone;
+  rebuild();
+  emit changed();
+}
+QQuick3DGeometry *Sculptures::geometry(int design,int kind,int part,int tone) {
+  // Only Moss & Myth paints its two sides differently.
+  if(design!=2) tone=0;
+  const int key=((design*6+kind-1)*6+part)*2+(tone ? 1 : 0);
+  auto &made=m_made[key];
+  if(!made) {
+    made=new SculptGeometry;
+    made->setParent(this);
+    // QML only borrows it: a geometry returned from a method would otherwise be the garbage collector's to free.
+    QQmlEngine::setObjectOwnership(made,QQmlEngine::CppOwnership);
+    made->shape(design,kind,part,tone);
+  }
+  return made;
+}
 void SculptGeometry::componentComplete() {
   QQuick3DGeometry::componentComplete();
   m_declared=false;

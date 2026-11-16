@@ -5,6 +5,7 @@
 #include <QFutureWatcher>
 #include <QVariantList>
 #include <QStringList>
+#include <QTimer>
 #include <QLockFile>
 #include <unordered_map>
 
@@ -16,6 +17,7 @@ class Backend : public QObject {
   Q_PROPERTY(bool whiteTurn READ whiteTurn NOTIFY changed)
   Q_PROPERTY(bool thinking READ thinking NOTIFY changed)
   Q_PROPERTY(bool checked READ checked NOTIFY changed)
+  Q_PROPERTY(int checkSquare READ checkSquare NOTIFY changed)
   Q_PROPERTY(bool finished READ finished NOTIFY changed)
   Q_PROPERTY(QString outcome READ outcome NOTIFY changed)
   Q_PROPERTY(QStringList moves READ moves NOTIFY changed)
@@ -42,6 +44,8 @@ public:
   bool whiteTurn() const { return position().white; }
   bool thinking() const { return m_thinking; }
   bool checked() const { return position().check(position().white); }
+  // Where the king in check stands, or -1.
+  int checkSquare() const;
   bool finished() const { return !m_outcome.isEmpty(); }
   QString outcome() const { return m_outcome; }
   QStringList moves() const { return m_notation; }
@@ -95,5 +99,7 @@ private:
   int m_difficulty = 1, m_pieceSet = 0;
   bool m_reducedMotion = false, m_movesOpen = false, m_saveBlocked = false, m_saveFailed = false;
   unsigned m_generation = 0;
+  // The pause before the computer answers, so the player's piece lands first. Undo and a new game stop it.
+  QTimer m_reply;
   std::shared_ptr<std::atomic_bool> m_cancel;
 };

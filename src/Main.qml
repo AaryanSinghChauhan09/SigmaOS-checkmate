@@ -289,12 +289,13 @@ ApplicationWindow {
       onRejected: newGameDialog.reject()
     }
     Material.roundedScale: theme.radius
-    onOpened: {
+    // The choices are in place before the dialog is seen, not after it has finished arriving.
+    onAboutToShow: {
       mode.currentIndex = backend.computer ? 0 : 1
       level.currentIndex = backend.difficulty
       side.currentIndex = backend.humanWhite ? 0 : 1
-      mode.forceActiveFocus()
     }
+    onOpened: mode.forceActiveFocus()
     onAccepted: { backend.newGame(mode.currentIndex === 0,level.currentIndex,side.currentIndex === 0); board.resetCamera() }
     contentItem: ColumnLayout {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
@@ -376,7 +377,7 @@ ApplicationWindow {
   Shortcut { sequence: "Tab"; enabled: !window.modalOpen; onActivated: window.chrome = !window.chrome }
   Shortcut { sequence: "R"; enabled: !window.modalOpen; onActivated: board.resetCamera() }
   Shortcut { sequence: "Escape"; enabled: !window.modalOpen; onActivated: backend.cancelSelection() }
-  Shortcut { sequences: ["Space","Return"]; enabled: !window.modalOpen; onActivated: board.keyboardSelect() }
+  Shortcut { sequences: ["Space","Return","Enter"]; enabled: !window.modalOpen; onActivated: board.keyboardSelect() }
   Shortcut { sequence: "Left"; enabled: !window.modalOpen; onActivated: board.navigate(-1,0) }
   Shortcut { sequence: "Right"; enabled: !window.modalOpen; onActivated: board.navigate(1,0) }
   Shortcut { sequence: "Up"; enabled: !window.modalOpen; onActivated: board.navigate(0,1) }
