@@ -25,6 +25,8 @@ ApplicationWindow {
   property var setDescriptions: [qsTr("Across the stars"),qsTr("Wood, ivory & brass"),qsTr("A woodland tale"),qsTr("A little sweetness")]
   property var setColors: ["#d9ad69","#c99b6b","#93a775","#db9eb2"]
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
+  // Tab clears the header and sidebar away so only the board is left; it comes back with every launch.
+  property bool chrome: true
   property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible || setMenu.visible
   function statusText() {
     if (backend.outcome === "white-wins") return qsTr("White wins by checkmate")
@@ -85,6 +87,8 @@ ApplicationWindow {
       anchors.fill: parent
       spacing: 0
       Rectangle {
+        objectName: "header"
+        visible: window.chrome
         Layout.fillWidth: true
         Layout.preferredHeight: 70
         color: theme.background
@@ -202,16 +206,16 @@ ApplicationWindow {
           }
         }
       }
-      Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
+      Rectangle { Layout.fillWidth: true; height: 1; color: window.line; visible: window.chrome }
       RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         spacing: 0
         BoardView { id: board; objectName: "board"; Layout.fillWidth: true; Layout.fillHeight: true }
-        Rectangle { Layout.fillHeight: true; width: 1; color: window.line; visible: backend.sidebar }
+        Rectangle { Layout.fillHeight: true; width: 1; color: window.line; visible: backend.sidebar && window.chrome }
         Rectangle {
           objectName: "sidebar"
-          visible: backend.sidebar
+          visible: backend.sidebar && window.chrome
           Layout.preferredWidth: window.width < 1100 ? 264 : 298
           Layout.fillHeight: true
           color: Qt.alpha(theme.foreground,.018)
@@ -369,7 +373,7 @@ ApplicationWindow {
     Material.roundedScale: theme.radius
     contentItem: Label {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the sidebar\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
+      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the sidebar\nTab  ·  Show or hide the interface\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
       wrapMode: Text.WordWrap
       lineHeight: 1.4
     }
@@ -420,6 +424,7 @@ ApplicationWindow {
   Shortcut { sequence: "3"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 2 }
   Shortcut { sequence: "4"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 3 }
   Shortcut { sequence: "B"; enabled: !window.modalOpen; onActivated: backend.sidebar = !backend.sidebar }
+  Shortcut { sequence: "Tab"; enabled: !window.modalOpen; onActivated: window.chrome = !window.chrome }
   Shortcut { sequence: "R"; enabled: !window.modalOpen; onActivated: board.resetCamera() }
   Shortcut { sequence: "Escape"; enabled: !window.modalOpen; onActivated: backend.cancelSelection() }
   Shortcut { sequences: ["Space","Return"]; enabled: !window.modalOpen; onActivated: board.keyboardSelect() }
