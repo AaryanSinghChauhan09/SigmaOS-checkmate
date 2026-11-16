@@ -21,6 +21,16 @@ Item {
   property var frames: ["#28343f", "#432b22", "#5b4934", "#f0dccb"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
   property bool sceneReady: false
+  // The board keeps time for its figures, which hover, breathe, stir and watch one another while the window has the player's attention.
+  property bool lively: motion
+  // Midnight Atelier is lit by a flame, which is never quite steady.
+  property real flicker: lively && design === 1 ? .04 * Math.sin(clock * 7.3) * Math.sin(clock * 2.1) + .018 * Math.sin(clock * 13.7) : 0
+  property real clock: 0
+  FrameAnimation { running: board.lively; onTriggered: board.clock += frameTime }
+  Timer {
+    interval: 1700; repeat: true; running: board.lively
+    onTriggered: if (Math.random() < .75) figures.objectAt(Math.floor(Math.random() * 32)).fidget()
+  }
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
@@ -123,7 +133,7 @@ Item {
     DirectionalLight {
       eulerRotation: Qt.vector3d(-45,-35,0)
       color: "#ffebd2"
-      brightness: 1.05
+      brightness: 1.05 * (1 + board.flicker)
       castsShadow: true
       shadowMapQuality: Light.ShadowMapQualityHigh
       shadowFactor: 80
@@ -175,12 +185,15 @@ Item {
           source: "#Cylinder"
           visible: parent.target
           y: 56
-          scale: Qt.vector3d(.23,1.1,.23)
+          // Markers swell and settle so the way forward is never static.
+          property real swell: board.lively && visible ? .23 * (1 + .09 * Math.sin(board.clock * 3.1 + tile.index)) : .23
+          scale: Qt.vector3d(swell,1.1,swell)
           materials: PrincipledMaterial { baseColor: board.accents[board.design]; opacity: .8; lighting: PrincipledMaterial.NoLighting }
         }
       }
     }
     Repeater3D {
+      id: figures
       model: 32
       ChessPiece {
         required property int index
@@ -189,6 +202,8 @@ Item {
         design: board.design
         seat: board.seat
         motion: board.motion
+        clock: board.clock
+        attention: backend.selected
         selected: backend.selected === record.square && record.alive
       }
     }

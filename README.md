@@ -6,7 +6,7 @@ A native 3D chess game for Omarchy, built with C++ and Qt Quick 3D. Play against
 
 The sets have individually sculpted pieces: swept metal panels, orbital rings and a crescent queen; carved wood and ivory horses; woodland foxes, owls, acorn sprites and antlered royalty; and glossy candy pieces with curled manes and gold crowns.
 
-Pieces glide into place, knights hop, captures shrink away, and check gets a brief pulse. Reduced motion is available in Settings. The interface follows Omarchy's theme and language; the board's materials follow the selected set.
+Every set moves in its own manner. Orbital craft hover over their squares with pulsing lights, bank into a glide and scan when chosen. Midnight Atelier's pieces are handled under flickering candlelight: tilted in unseen fingers, set down with a rock, and tipped over when taken. Moss & Myth's creatures breathe and stir, turn to watch a neighbour being picked, and leap. Candy Kingdom's sweets wobble like jelly and pop. Knights jump highest everywhere, and check gets a brief pulse. Reduced motion is available in Settings. The interface follows Omarchy's theme and language; the board's materials follow the selected set.
 
 ## Play
 
