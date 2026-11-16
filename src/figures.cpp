@@ -132,7 +132,7 @@ bool ridge(const Field &field,P low,float cell,P home,P &spot,P &facing,float st
 }
 
 // Carved solids are cut from a grid of cells.
-void cast(const Mould &mould,SculptFigure &out) {
+void cast(const Mould &mould,SculptFigure &out,bool fitEdges) {
   const Field &field=mould.field;
   const float cell=mould.cell;
   P low,high;
@@ -145,7 +145,7 @@ void cast(const Mould &mould,SculptFigure &out) {
     const float pitch=std::max(.25f,length(fall));
     for(int step=0;step<2;++step) spot=spot-normalize(fall)*std::clamp(field(spot)/pitch,-cell*.6f,cell*.6f);
     P rise=slope(field,spot,cell*.4f), facing=normalize(rise);
-    if(ridge(field,low,cell,home,spot,facing,std::max(.25f,length(rise)))) rise=slope(field,spot,cell*.4f);
+    if(fitEdges && ridge(field,low,cell,home,spot,facing,std::max(.25f,length(rise)))) rise=slope(field,spot,cell*.4f);
     add(out,spot,facing,daylight(mould,spot,facing,std::max(.25f,length(rise))));
     return spot;
   },[&](int a,int b,int c) { face(out,first+quint32(a),first+quint32(b),first+quint32(c)); });
@@ -303,7 +303,8 @@ SculptFigure Figures::part(int design,int kind,int part) {
   SculptFigure figure;
   for(const Mould &mould:moulds) {
     if(mould.turned) turn(mould,figure);
-    else cast(mould,figure);
+    // Stepped panel fields in the other sets are discontinuous and cannot guide edge fitting.
+    else cast(mould,figure,design==1);
   }
   return figure;
 }
