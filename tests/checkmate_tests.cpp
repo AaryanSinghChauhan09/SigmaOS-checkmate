@@ -446,7 +446,7 @@ private slots:
             game.newGame(false,1);
             QVERIFY(game.move(12,28));
             QVERIFY(game.move(52,36));
-            game.setPieceSet(3); game.setReducedMotion(true);
+            game.setPieceSet(3); game.setReducedMotion(true); game.setSidebar(false);
             fen = game.fen();
         }
         Backend restored(dir.filePath("game.json"));
@@ -454,6 +454,8 @@ private slots:
         QCOMPARE(restored.moves(),QStringList({"e4","e5"}));
         QCOMPARE(restored.pieceSet(),3);
         QVERIFY(restored.reducedMotion());
+        QVERIFY(!restored.sidebar());
+        QVERIFY(Backend(dir.filePath("fresh.json")).sidebar());
         restored.undo();
         QCOMPARE(restored.moves().size(),1);
     }
@@ -799,6 +801,56 @@ private slots:
         QTRY_VERIFY(!dialog->property("visible").toBool());
         auto *board=window->findChild<QQuickItem *>("board");
         QVERIFY(board);
+        {
+            // The piece set is picked from a dropdown in the header.
+            auto *picker=window->findChild<QQuickItem *>("setPicker");
+            auto *menu=window->findChild<QObject *>("setMenu");
+            QVERIFY(picker && menu);
+            backend.setPieceSet(0);
+            QTest::mouseClick(window,Qt::LeftButton,{},picker->mapToScene(QPointF(picker->width()/2,picker->height()/2)).toPoint());
+            QTRY_VERIFY(menu->property("opened").toBool());
+            // Delegates live only in the visual tree, so walk it rather than the object tree.
+            std::function<QQuickItem *(QQuickItem *)> find=[&](QQuickItem *item) -> QQuickItem * {
+                if (item->objectName()=="set-3") return item;
+                for (auto *child : item->childItems()) if (auto *hit=find(child)) return hit;
+                return nullptr;
+            };
+            auto *candy=find(window->contentItem());
+            QVERIFY(candy);
+            QTest::mouseClick(window,Qt::LeftButton,{},candy->mapToScene(QPointF(candy->width()/2,candy->height()/2)).toPoint());
+            QCOMPARE(backend.pieceSet(),3);
+            QTRY_VERIFY(!menu->property("visible").toBool());
+            backend.setPieceSet(0);
+            // The keyboard works inside the open menu.
+            const QPoint pickerCenter=picker->mapToScene(QPointF(picker->width()/2,picker->height()/2)).toPoint();
+            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
+            QTRY_VERIFY(menu->property("opened").toBool());
+            QTest::keyClick(window,Qt::Key_Down);
+            QTest::keyClick(window,Qt::Key_Return);
+            QCOMPARE(backend.pieceSet(),1);
+            QTRY_VERIFY(!menu->property("visible").toBool());
+            backend.setPieceSet(0);
+            // The click that dismisses the menu never reaches the board, even over a legal destination.
+            backend.selectSquare(12);
+            QCOMPARE(backend.selected(),12);
+            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
+            QTRY_VERIFY(menu->property("opened").toBool());
+            for (const QPointF spot : {QPointF(.5,.5),QPointF(.5,.62),QPointF(.45,.7)})
+                QTest::mouseClick(window,Qt::LeftButton,{},board->mapToScene(QPointF(board->width()*spot.x(),board->height()*spot.y())).toPoint());
+            QTRY_VERIFY(!menu->property("visible").toBool());
+            QVERIFY(backend.moves().isEmpty());
+            backend.cancelSelection();
+            // B hides the sidebar and hands its room to the board, and brings it back.
+            auto *sidebar=window->findChild<QQuickItem *>("sidebar");
+            QVERIFY(sidebar && sidebar->isVisible());
+            const qreal narrow=board->width();
+            QTest::keyClick(window,Qt::Key_B);
+            QVERIFY(!backend.sidebar());
+            QTRY_VERIFY(board->width()>narrow+200);
+            QTest::keyClick(window,Qt::Key_B);
+            QVERIFY(backend.sidebar());
+            QTRY_COMPARE(board->width(),narrow);
+        }
         board->setProperty("cursorSquare",28);
         QTest::keyClick(window,Qt::Key_F);
         QTest::keyClick(window,Qt::Key_Right);

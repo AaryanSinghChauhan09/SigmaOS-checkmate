@@ -29,6 +29,7 @@ class Backend : public QObject {
   Q_PROPERTY(int pieceSet READ pieceSet WRITE setPieceSet NOTIFY preferencesChanged)
   Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY preferencesChanged)
   Q_PROPERTY(bool autoRotate READ autoRotate WRITE setAutoRotate NOTIFY preferencesChanged)
+  Q_PROPERTY(bool sidebar READ sidebar WRITE setSidebar NOTIFY preferencesChanged)
   Q_PROPERTY(bool saveHealthy READ saveHealthy NOTIFY changed)
   Q_PROPERTY(QString error READ error NOTIFY changed)
   Q_PROPERTY(QString fen READ fen NOTIFY changed)
@@ -54,6 +55,7 @@ public:
   int pieceSet() const { return m_pieceSet; }
   bool reducedMotion() const { return m_reducedMotion; }
   bool autoRotate() const { return m_autoRotate; }
+  bool sidebar() const { return m_sidebar; }
   bool saveHealthy() const { return ownsSave() && !m_saveBlocked && !m_saveFailed; }
   QString error() const { return m_error; }
   bool ownsSave() const { return m_savePath == ":memory:" || (m_saveLock && m_saveLock->isLocked()); }
@@ -69,6 +71,7 @@ public:
   void setPieceSet(int value);
   void setReducedMotion(bool value);
   void setAutoRotate(bool value);
+  void setSidebar(bool value);
 signals:
   void changed();
   void preferencesChanged();
@@ -92,7 +95,7 @@ private:
   QString m_outcome, m_error, m_savePath;
   bool m_computer = true, m_humanWhite = true, m_thinking = false;
   int m_difficulty = 1, m_pieceSet = 0;
-  bool m_reducedMotion = false, m_autoRotate = false, m_saveBlocked = false, m_saveFailed = false;
+  bool m_reducedMotion = false, m_autoRotate = false, m_sidebar = true, m_saveBlocked = false, m_saveFailed = false;
   unsigned m_generation = 0;
   std::shared_ptr<std::atomic_bool> m_cancel;
 };
