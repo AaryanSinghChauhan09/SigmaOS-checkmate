@@ -7,7 +7,7 @@ Item {
   property int design: backend.pieceSet
   property bool motion: !backend.reducedMotion && Window.window && Window.window.active
   property real manualAzimuth: 0
-  property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + manualAzimuth
+  property real azimuth: (backend.computer ? (backend.humanWhite ? 0 : 180) : 0) + manualAzimuth
   // The figures turn with the seat as the camera does, so their faces stay toward whoever is playing.
   property real seat: seatAngle()
   // Sculpted figures read best from a lower seat, the carved faces lowest; the home view follows the set until the player orbits or zooms.
@@ -34,7 +34,7 @@ Item {
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
-  function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
+  function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : 0 }
   function homeElevation() { return design === 2 ? -46 : -47 }
   function homeDistance() { return Math.max(design === 2 ? 12.9 : 17, fitDistance) }
   // The cast sets are seen through a longer lens from further back, so the near rank is not looked down on from overhead.
@@ -81,7 +81,7 @@ Item {
       seatBehavior.enabled = Qt.binding(function() { return board.motion })
       checkPulse.stop(); checkGlow = .22
       azimuth = Qt.binding(function() {
-        return (backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0)) + board.manualAzimuth
+        return (backend.computer ? (backend.humanWhite ? 0 : 180) : 0) + board.manualAzimuth
       })
       rotationBehavior.enabled = Qt.binding(function() { return board.motion && !orbit.dragging })
     }
