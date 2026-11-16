@@ -874,6 +874,33 @@ private slots:
                 const QPointF corner=control->mapToItem(footer,QPointF(0,0));
                 QVERIFY2(corner.x()>=0 && corner.y()>=0 && corner.x()+control->width()<=footer->width() && corner.y()+control->height()<=footer->height(),name);
             }
+            {
+                // What the footer says keeps to the gap between its two groups of buttons, however little room there is.
+                auto *say=window->findChild<QQuickItem *>("say");
+                auto *lastSet=find(window->contentItem(),"set-3");
+                auto *firstAction=find(window->contentItem(),"movesButton");
+                QVERIFY(say && lastSet && firstAction);
+                auto clear=[&] {
+                    const qreal left=lastSet->mapToItem(footer,QPointF(lastSet->width(),0)).x(), right=firstAction->mapToItem(footer,QPointF(0,0)).x();
+                    return say->x()>=left && say->x()+say->width()<=right;
+                };
+                QVERIFY(clear());
+                // With room to spare it is dead centre.
+                QVERIFY(qAbs(say->x()+say->width()/2-footer->width()/2)<1);
+                const QSize wide=window->size();
+                window->resize(window->minimumWidth(),wide.height());
+                QTRY_COMPARE(footer->width(),qreal(window->minimumWidth()));
+                QTRY_VERIFY(clear());
+                // Squeezed far below anything it would be given, it shortens rather than spilling over the buttons.
+                const qreal natural=say->implicitWidth();
+                const qreal before=lastSet->mapToItem(footer,QPointF(lastSet->width(),0)).x(), after=footer->width()-firstAction->mapToItem(footer,QPointF(0,0)).x();
+                footer->setWidth(before+after+32+natural*.6);
+                QTRY_VERIFY(say->width()<natural);
+                QVERIFY(clear());
+                window->resize(wide);
+                QTRY_COMPARE(footer->width(),qreal(wide.width()));
+                QTRY_VERIFY(qAbs(say->x()+say->width()/2-footer->width()/2)<1);
+            }
             // The four sets are picked from their signs.
             backend.setPieceSet(0);
             press(find(window->contentItem(),"set-3"));

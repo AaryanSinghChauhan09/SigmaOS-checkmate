@@ -126,6 +126,7 @@ ApplicationWindow {
         color: theme.background
         Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: window.line }
         RowLayout {
+          id: tools
           anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
           spacing: 12
           // The name is also the way to the shortcuts.
@@ -188,15 +189,24 @@ ApplicationWindow {
             }
           }
         }
-        // What the game has to say for itself, dead centre: who is playing, and whose move it is.
-        Row {
-          anchors.centerIn: parent
+        // What the game has to say for itself: who is playing, and whose move it is. It sits dead centre while
+        // there is room, and otherwise keeps to the gap between the two groups of buttons, whichever side each is on:
+        // the players give way first, then the status shortens, and a save that is failing is always said in full.
+        RowLayout {
+          id: say
+          objectName: "say"
+          readonly property real from: Math.min(tools.x + tools.width,actions.x + actions.width) + 16
+          readonly property real to: Math.max(tools.x,actions.x) - 16
+          width: Math.max(0,Math.min(implicitWidth,to - from))
+          x: Math.max(from,Math.min(parent.width / 2 - width / 2,to - width))
+          anchors.verticalCenter: parent.verticalCenter
           spacing: 10
-          Text { anchors.verticalCenter: parent.verticalCenter; text: backend.computer ? qsTr("Computer") + "  ·  " + window.difficultyNames[backend.difficulty] : qsTr("Two players"); color: window.muted; font.pixelSize: 12 }
-          Text { anchors.verticalCenter: parent.verticalCenter; objectName: "status"; text: window.statusText(); color: backend.checked ? theme.colors.red : theme.foreground; font.pixelSize: 12 }
-          Text { anchors.verticalCenter: parent.verticalCenter; visible: !backend.saveHealthy; text: qsTr("Game is not being saved"); color: theme.colors.red; font.pixelSize: 12 }
+          Text { text: backend.computer ? qsTr("Computer") + "  ·  " + window.difficultyNames[backend.difficulty] : qsTr("Two players"); color: window.muted; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
+          Text { objectName: "status"; text: window.statusText(); color: backend.checked ? theme.colors.red : theme.foreground; font.pixelSize: 12; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: Math.min(implicitWidth,120) }
+          Text { visible: !backend.saveHealthy; text: qsTr("Game is not being saved"); color: theme.colors.red; font.pixelSize: 12 }
         }
         RowLayout {
+          id: actions
           anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
           spacing: 2
           FooterIcon { objectName: "movesButton"; name: qsTr("Moves"); key: "B"; path: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"; lit: backend.movesOpen; onClicked: backend.movesOpen = !backend.movesOpen }
