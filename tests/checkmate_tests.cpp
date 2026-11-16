@@ -384,6 +384,36 @@ private slots:
         QCOMPARE(Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1").castle,0);
         QCOMPARE(Chess::Position::fromFen("r3k3/8/8/8/8/8/8/4K2R w KQkq - 0 1").castle,1|8);
         QCOMPARE(Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1").fen(),std::string("4k3/8/8/8/8/8/8/4K3 w - - 0 1"));
+        // An en passant square is empty, with the pawn that passed it standing just beyond.
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/3b4/3pP3/8/8/8/4K3 w - d6 0 1"));
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/8/4P3/8/8/8/4K3 w - d6 0 1"));
+        const auto passing=Chess::Position::fromFen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+        QCOMPARE(passing.after({36,43}).board[35].kind,int(Chess::Empty));
+    }
+
+    void theComputerKnowsHowAGameEnds() {
+        const auto never=std::make_shared<std::atomic_bool>(false);
+        // A mate on the last move the fifty-move rule allows is still a mate.
+        const auto lastChance=Chess::Position::fromFen("7k/8/5KQ1/8/8/8/8/8 w - - 99 1");
+        for (int level : {1,2}) {
+            const auto next=lastChance.after(Chess::bestMove(lastChance,level,never));
+            QVERIFY(next.check(false) && next.legal().empty());
+        }
+        // Taking the rook with the queen is stalemate, and a won game thrown away.
+        const auto trap=Chess::Position::fromFen("7k/Q4r2/6K1/8/8/8/8/8 w - - 0 1");
+        QVERIFY(trap.after({48,53}).legal().empty() && !trap.after({48,53}).check(false));
+        for (int level : {0,1,2}) for (int again=0;again<5;++again) {
+            const auto next=trap.after(Chess::bestMove(trap,level,never));
+            QVERIFY(next.check(false) || !next.legal().empty());
+        }
+        // Losing, with a third repetition one step away, every level takes the draw.
+        std::vector<Chess::Position> history{Chess::Position::fromFen("7k/8/5K2/8/8/8/8/1Q6 w - - 0 1")};
+        for (const auto &move : std::vector<Chess::Move>{{1,9},{63,62},{9,1},{62,63},{1,9},{63,62},{9,1}}) history.push_back(history.back().after(move));
+        for (int level : {0,1,2}) {
+            const auto reply=Chess::bestMove(history.back(),level,never,history);
+            QCOMPARE(reply,(Chess::Move{62,63}));
+            QCOMPARE(history.back().after(reply).key(),history.front().key());
+        }
     }
 
     void specialMoveTrees() {
@@ -486,7 +516,13 @@ private slots:
         Backend other(path);
         QVERIFY(!other.ownsSave());
         QVERIFY(!other.error().isEmpty());
+        QVERIFY(other.move(12,28));
         other.newGame(false,1); other.setPieceSet(3);
+        // It may start afresh, unsaved, and goes on saying why.
+        QVERIFY(other.moves().isEmpty());
+        QVERIFY(!other.error().isEmpty());
+        QVERIFY(!other.saveHealthy());
+        QVERIFY(other.saveContended());
         QVERIFY(original.open(QIODevice::ReadOnly));
         QCOMPARE(original.readAll(),bytes);
     }

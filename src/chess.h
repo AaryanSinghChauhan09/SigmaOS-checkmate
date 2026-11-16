@@ -29,6 +29,10 @@ struct Position {
   bool check(bool side) const;
   bool insufficient() const;
   std::vector<Move> legal() const;
+  // Whether the side to move has any move at all, without listing them.
+  bool anyLegal() const;
+  // Every move the pieces could make, before asking whether it leaves the mover in check.
+  std::vector<Move> candidates() const;
   Position after(Move move) const;
   std::string san(Move move) const;
 };
@@ -36,5 +40,5 @@ std::string squareName(int square);
 int square(const std::string &name);
 uint64_t perft(const Position &position, int depth);
 Move bestMove(const Position &position, int level, const std::shared_ptr<std::atomic_bool> &cancel,
-              const std::vector<std::string> &history = {});
+              const std::vector<Position> &history = {});
 }

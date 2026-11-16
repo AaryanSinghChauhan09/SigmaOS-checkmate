@@ -61,6 +61,10 @@ public:
   bool movesOpen() const { return m_movesOpen; }
   bool saveHealthy() const { return ownsSave() && !m_saveBlocked && !m_saveFailed; }
   QString error() const { return m_error; }
+  // The save is held by another process, rather than out of reach for some other reason.
+  bool saveContended() const { return m_saveLock && m_saveLock->error() == QLockFile::LockFailedError; }
+  // The socket a second launch would knock on could not be opened.
+  void reportSocket(const QString &reason);
   bool ownsSave() const { return m_savePath == ":memory:" || (m_saveLock && m_saveLock->isLocked()); }
   QString fen() const { return QString::fromStdString(position().fen()); }
   const Chess::Position &position() const { return m_positions.back(); }

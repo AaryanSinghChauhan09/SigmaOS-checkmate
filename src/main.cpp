@@ -59,10 +59,11 @@ int main(int argc, char *argv[]) {
     Theme theme;
     Backend backend;
     if (!backend.ownsSave()) {
-      // Another window may hold the save and be a moment from listening; give it that moment.
+      // Another window may hold the save and be a moment from listening; give it that moment. A folder that
+      // cannot be written has nobody to wait for.
       QElapsedTimer startup;
       startup.start();
-      while (startup.elapsed() < 2000) {
+      while (backend.saveContended() && startup.elapsed() < 2000) {
         existing.abort(); existing.connectToServer(socketName);
         if (existing.waitForConnected(100)) return 0;
         QThread::msleep(50);
@@ -75,7 +76,7 @@ int main(int argc, char *argv[]) {
     server.setSocketOptions(QLocalServer::UserAccessOption);
     QLocalServer::removeServer(socketName);
     // Without the socket a second launch opens a window of its own, which the save lock keeps from writing.
-    if (!server.listen(socketName)) std::cerr << server.errorString().toStdString() << "\n";
+    if (!server.listen(socketName)) { std::cerr << server.errorString().toStdString() << "\n"; backend.reportSocket(server.errorString()); }
 
     // Declared before the engine, so it is still there while the scene that borrows from it is torn down.
     Sculptures sculptures;
