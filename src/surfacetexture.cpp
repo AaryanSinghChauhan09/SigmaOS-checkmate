@@ -1,4 +1,5 @@
 #include "surfacetexture.h"
+#include <QHash>
 #include <algorithm>
 #include <QSize>
 #include <cmath>
@@ -12,9 +13,13 @@ void SurfaceTexture::rebuild() {
   const int width = 256, height = m_style == 4 ? 128 : 256;
   setSize({width,height});
   setHasTransparency(false);
+  setFormat(m_style == 4 ? QQuick3DTextureData::RGBA32F : QQuick3DTextureData::RGBA8);
+  // Each surface is computed once and shared by every texture that shows it.
+  static QHash<int,QByteArray> surfaces;
+  const auto made = surfaces.constFind(m_style);
+  if (made != surfaces.constEnd()) { setTextureData(*made); return; }
   QByteArray data;
   if (m_style == 4) {
-    setFormat(QQuick3DTextureData::RGBA32F);
     data.resize(width*height*4*sizeof(float));
     for (int y=0;y<height;++y) for (int x=0;x<width;++x) {
       // Procedural probe rows run from nadir to zenith.
@@ -33,7 +38,6 @@ void SurfaceTexture::rebuild() {
       std::memcpy(data.data()+(y*width+x)*sizeof(pixel),pixel,sizeof(pixel));
     }
   } else {
-    setFormat(QQuick3DTextureData::RGBA8);
     data.resize(width*height*4);
     for (int y=0;y<height;++y) for (int x=0;x<width;++x) {
       float noise=std::sin(x*.73f+y*1.37f)*std::sin(x*2.27f-y*.37f);
@@ -49,5 +53,6 @@ void SurfaceTexture::rebuild() {
       data[offset]=shade; data[offset+1]=shade; data[offset+2]=shade; data[offset+3]=char(255);
     }
   }
+  surfaces.insert(m_style,data);
   setTextureData(data);
 }

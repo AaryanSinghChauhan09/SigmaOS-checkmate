@@ -11,6 +11,9 @@ Node {
   required property bool motion
   required property bool selected
   required property real seat
+  // The scene's shared surfaces: the set's own, and Atelier's pale wood.
+  required property Texture grain
+  required property Texture paleGrain
   property real lift: 0
   // Followed by hand, like `place`, so a capture can be timed to its captor's arrival.
   property bool alive: record.alive
@@ -266,10 +269,9 @@ Node {
     property int boardSquare: piece.record.square
     pickable: piece.record.alive
     geometry: SculptGeometry { kind: piece.record.kind; design: piece.design; tone: piece.record.white ? 0 : 1; part: 0 }
-    Texture { id: surface; textureData: SurfaceTexture { style: piece.design === 1 ? (piece.record.white ? 5 : 1) : piece.design } tilingModeVertical: Texture.Repeat }
     // Ceramic or gunmetal, polished wood, painted carving, boiled sugar.
     materials: PrincipledMaterial {
-      baseColorMap: piece.woodland ? null : surface
+      baseColorMap: piece.woodland ? null : piece.design === 1 && piece.record.white ? piece.paleGrain : piece.grain
       baseColor: piece.bodyColor
       vertexColorsEnabled: true
       metalness: piece.design === 0 ? (piece.record.white ? .2 : .5) : 0

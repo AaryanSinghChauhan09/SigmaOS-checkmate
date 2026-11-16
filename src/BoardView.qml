@@ -124,7 +124,9 @@ Item {
       specularAAEnabled: true
       tonemapMode: SceneEnvironment.TonemapModeAces
     }
+    // Two surfaces dress the whole scene, shared by every square and piece: the set's own, and the pale wood of Atelier's light side.
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
+    Texture { id: paleMap; textureData: SurfaceTexture { style: 5 } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }
     Node {
       eulerRotation: Qt.vector3d(board.elevation,board.azimuth,0)
       PerspectiveCamera { id: camera; z: board.distance; clipNear: .1; clipFar: 150; fieldOfView: board.lens }
@@ -176,7 +178,7 @@ Item {
         y: .04
         scale: Qt.vector3d(.00996,.001,.00996)
         materials: PrincipledMaterial {
-          baseColorMap: Texture { textureData: SurfaceTexture { style: board.design === 1 && (Math.floor(tile.index / 8) + tile.index % 8) % 2 === 1 ? 5 : board.design } }
+          baseColorMap: board.design === 1 && (Math.floor(tile.index / 8) + tile.index % 8) % 2 === 1 ? paleMap : surfaceMap
           baseColor: tile.marked ? board.accents[board.design] : (Math.floor(index / 8) + index % 8) % 2 === 1 ? board.lightSquares[board.design] : board.darkSquares[board.design]
           roughness: board.design === 3 ? .3 : .55
           metalness: board.design === 0 ? .15 : 0
@@ -202,6 +204,8 @@ Item {
         design: board.design
         seat: board.seat
         motion: board.motion
+        grain: surfaceMap
+        paleGrain: paleMap
         clock: board.clock
         attention: backend.selected
         selected: backend.selected === record.square && record.alive

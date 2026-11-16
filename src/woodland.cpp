@@ -1,4 +1,5 @@
 #include "woodland.h"
+#include <thread>
 #include "clay.h"
 #include <algorithm>
 #include <cmath>
@@ -604,8 +605,15 @@ const Woodland::Figure &Woodland::figure(int kind,int tone) {
   const int key=kind*2+(tone ? 1 : 0);
   const auto found=figures.find(key);
   if(found!=figures.end()) return found->second;
+  // The first figure asked for has all six carved, each on a thread of its own: a set is never wanted one figure at a time.
+  if(carvings.empty()) {
+    Carving carved[6];
+    std::vector<std::thread> carvers;
+    for(int each=0;each<6;++each) carvers.emplace_back([&carved,each] { carved[each]=sculpture(each+1); });
+    for(auto &carver:carvers) carver.join();
+    for(int each=0;each<6;++each) carvings.emplace(each+1,std::move(carved[each]));
+  }
   auto carving=carvings.find(kind);
-  if(carving==carvings.end()) carving=carvings.emplace(kind,sculpture(kind)).first;
   const Carving &carved=carving->second;
   Figure figure;
   figure.indices=carved.indices;
