@@ -920,6 +920,19 @@ private slots:
                 const QPointF corner=control->mapToItem(sidebar,QPointF(0,0));
                 QVERIFY2(corner.x()>=0 && corner.y()>=0 && corner.x()+control->width()<=sidebar->width() && corner.y()+control->height()<=sidebar->height(),name);
             }
+            {
+                // In a narrow window the sidebar slims down, and its name still clears the buttons beside it.
+                const QSize wide=window->size();
+                window->resize(1000,wide.height());
+                auto *toggle=window->findChild<QQuickItem *>("sidebarButton");
+                auto *title=window->findChild<QQuickItem *>("title");
+                QVERIFY(toggle && title);
+                QTRY_COMPARE(sidebar->width(),264.0);
+                QTRY_VERIFY(title->mapToItem(sidebar,QPointF(title->property("contentWidth").toReal(),0)).x()<=toggle->mapToItem(sidebar,QPointF(0,0)).x());
+                QVERIFY(!title->property("truncated").toBool());
+                window->resize(wide);
+                QTRY_COMPARE(board->width(),narrow);
+            }
             // Tab clears the sidebar away for a bare board, and brings it back.
             QTest::keyClick(window,Qt::Key_Tab);
             QTRY_VERIFY(!sidebar->isVisible());
