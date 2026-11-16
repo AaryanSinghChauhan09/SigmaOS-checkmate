@@ -94,18 +94,36 @@ struct Frame {
 };
 
 // A turned body: a (radius,height) outline from the axis and back, smoothed and revolved.
+// Drawn taut, a short chamfer beside a long face cannot swing out into a lip.
 struct Lathe {
   std::vector<float> r,y;
   float reach=0,low=0,high=0;
-  Lathe(std::initializer_list<std::pair<float,float>> outline) {
+  Lathe(std::initializer_list<std::pair<float,float>> outline,bool taut=false) {
     const std::vector<std::pair<float,float>> knots(outline);
     const int count=int(knots.size());
     auto knot=[&](int i) { return knots[size_t(std::clamp(i,0,count-1))]; };
     auto spline=[](float a,float b,float c,float d,float t) { return .5f*(2*b+(-a+c)*t+(2*a-5*b+4*c-d)*t*t+(-a+3*b-3*c+d)*t*t*t); };
+    // The way through a knot, no longer than the shorter run beside it.
+    auto lean=[&](int i) {
+      const auto a=knot(i-1), b=knot(i), c=knot(i+1);
+      std::pair<float,float> way{(c.first-a.first)*.5f,(c.second-a.second)*.5f};
+      const float most=std::min(hypot2(b.first-a.first,b.second-a.second),hypot2(c.first-b.first,c.second-b.second));
+      const float size=hypot2(way.first,way.second);
+      if(size>most) way={way.first*most/size,way.second*most/size};
+      return way;
+    };
     for(int i=0;i+1<count;++i) for(int j=0;j<4;++j) {
       const auto a=knot(i-1), b=knot(i), c=knot(i+1), d=knot(i+2);
-      r.push_back(std::max(0.f,spline(a.first,b.first,c.first,d.first,j/4.f)));
-      y.push_back(spline(a.second,b.second,c.second,d.second,j/4.f));
+      const float t=j/4.f;
+      if(!taut) {
+        r.push_back(std::max(0.f,spline(a.first,b.first,c.first,d.first,t)));
+        y.push_back(spline(a.second,b.second,c.second,d.second,t));
+        continue;
+      }
+      const auto out=lean(i), in=lean(i+1);
+      const float t2=t*t, t3=t2*t, h00=2*t3-3*t2+1, h10=t3-2*t2+t, h01=3*t2-2*t3, h11=t3-t2;
+      r.push_back(std::max(0.f,h00*b.first+h10*out.first+h01*c.first+h11*in.first));
+      y.push_back(h00*b.second+h10*out.second+h01*c.second+h11*in.second);
     }
     r.push_back(knots.back().first); y.push_back(knots.back().second);
     low=high=y.front();

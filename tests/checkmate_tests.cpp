@@ -14,6 +14,7 @@
 #include <QtTest>
 
 #include "backend.h"
+#include "figures.h"
 #include "sculptgeometry.h"
 #include "surfacetexture.h"
 #include <QQuick3D>
@@ -705,6 +706,52 @@ private slots:
         }
     }
 
+    void tautOutlinesThrowNoLip() {
+        // The brass shoe's own outline: a long flat sole running into a short chamfer.
+        const std::initializer_list<std::pair<float,float>> shoe{{0,-.022f},{.346f,-.022f},{.361f,-.012f},{.365f,.005f},{.365f,.05f},{.359f,.066f},{.34f,.075f},{0,.075f}};
+        // Left loose, the spline swings past its widest knot into a lip thinner than any cell; drawn taut it cannot.
+        QVERIFY(Clay::Lathe(shoe).reach>.372f);
+        QVERIFY(Clay::Lathe(shoe,true).reach<.367f);
+    }
+
+    void atelierBrassFollowsItsMoulds() {
+        for(int kind=1;kind<=6;++kind) {
+            const auto moulds=Atelier::moulds(kind,1);
+            const SculptFigure figure=Figures::part(1,kind,1);
+            QVERIFY(!figure.indices.empty() && figure.indices.size()%3==0);
+            // Turned shoes and rings hold to their mould all the way round, with no teeth cut across a rim.
+            // The king's cross is carved, and may ease its arrises by a little more.
+            const float allowed=kind==6 ? .0015f : .0008f;
+            float worst=0;
+            for(size_t first=0;first<figure.indices.size();first+=3) {
+                QVector3D middle;
+                for(int corner=0;corner<3;++corner) middle+=figure.vertices[figure.indices[first+corner]].position/3;
+                float distance=1e9f;
+                for(const auto &mould:moulds) distance=std::min(distance,mould.field({middle.x(),middle.y(),middle.z()}));
+                worst=std::max(worst,std::abs(distance));
+            }
+            QVERIFY2(worst<allowed,qPrintable(QString("kind %1 strays %2 from its mould").arg(kind).arg(worst)));
+        }
+    }
+
+    void turnedCapsKeepDirectionalContactShading() {
+        const SculptFigure king=Figures::part(1,6,0);
+        std::map<float,std::pair<float,float>> rings;
+        for(const auto &vertex:king.vertices) {
+            if(vertex.position.y()<1.25f) continue;
+            const float shade=vertex.color.x();
+            auto [ring,inserted]=rings.try_emplace(vertex.position.y(),shade,shade);
+            if(!inserted) {
+                ring->second.first=std::min(ring->second.first,shade);
+                ring->second.second=std::max(ring->second.second,shade);
+            }
+        }
+        float variation=0;
+        for(const auto &ring:rings) variation=std::max(variation,ring.second.second-ring.second.first);
+        // The flat cross shades the cap differently along its arms and across its thickness.
+        QVERIFY(variation>.01f);
+    }
+
     void windowLoadsAndAnswersTheKeyboard() {
         QTemporaryDir dir;
         Translator translator(dir.path() + "/language");
@@ -777,7 +824,8 @@ private slots:
         QVERIFY(pawn->property("z").toDouble()>.5);
         QVERIFY(pawn->property("z").toDouble()<2.5);
         backend.undo();
-        QTRY_COMPARE_WITH_TIMEOUT(pawn->property("z").toDouble(),2.5,1500);
+        // Quick 3D coordinates use float precision, including the final animation setter.
+        QTRY_VERIFY_WITH_TIMEOUT(qFuzzyCompare(pawn->property("z").toFloat(),2.5f),1500);
         QTRY_COMPARE_WITH_TIMEOUT(pawn->property("lift").toDouble(),0.0,1500);
         auto *hop=pawn->findChild<QObject *>("moveHop");
         QVERIFY(hop);

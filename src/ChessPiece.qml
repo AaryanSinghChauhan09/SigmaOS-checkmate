@@ -88,6 +88,8 @@ Node {
       metalness: piece.design === 0 ? (piece.record.white ? .2 : .5) : 0
       roughness: piece.candy ? .24 : piece.design === 1 ? .34 : piece.design === 0 ? (piece.record.white ? .3 : .36) : .7
       specularAmount: piece.woodland ? .3 : .5
+      // Polished wood keeps its mirror for the lights it faces; the glancing sheen is held to the very edge.
+      fresnelPower: piece.design === 1 ? 8 : 5
       // A full lacquer mirrors the dark of the room at every grazing edge, so the sweets wear only a light glaze.
       clearcoatAmount: piece.woodland ? 0 : piece.design === 0 ? .2 : .35
       clearcoatRoughnessAmount: piece.design === 1 ? .14 : piece.candy ? .08 : .2
