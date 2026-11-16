@@ -78,9 +78,9 @@ Item {
   }
   Image {
     anchors.fill: parent
-    source: board.design === 0 ? "qrc:/scenes/orbital.png" : board.design === 2 ? "qrc:/scenes/woodland.png" : ""
+    source: ["qrc:/scenes/orbital.png", "qrc:/scenes/atelier.png", "qrc:/scenes/woodland.png", "qrc:/scenes/candy.png"][board.design]
     fillMode: Image.PreserveAspectCrop
-    opacity: board.design === 0 ? .85 : .7
+    opacity: [ .85, .9, .7, .9 ][board.design]
     visible: source.toString().length > 0
   }
   View3D {
@@ -92,8 +92,10 @@ Item {
       lightProbe: Texture { textureData: SurfaceTexture { style: 4 } }
       // Candy sits in a brighter, softer room than the other sets.
       probeExposure: board.design === 3 ? 1.15 : .75
-      antialiasingMode: SceneEnvironment.MSAA
-      antialiasingQuality: SceneEnvironment.High
+      // Supersampling smooths both the silhouettes and the bright material edges.
+      antialiasingMode: SceneEnvironment.SSAA
+      antialiasingQuality: SceneEnvironment.VeryHigh
+      specularAAEnabled: true
       tonemapMode: SceneEnvironment.TonemapModeAces
     }
     Texture { id: surfaceMap; textureData: SurfaceTexture { style: board.design } tilingModeHorizontal: Texture.Repeat; tilingModeVertical: Texture.Repeat }

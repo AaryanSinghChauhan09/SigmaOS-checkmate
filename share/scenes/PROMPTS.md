@@ -1,6 +1,6 @@
 # Scene backgrounds
 
-These two original background images were generated with the built-in image generation tool for Checkmate. They contain no board or pieces; the game renders its board and sculpted pieces in real time with Qt Quick 3D. They ship in the binary and require no network access.
+These four original background images were generated with the built-in image generation tool for Checkmate. They contain no board or pieces; the game renders its board and sculpted pieces in real time with Qt Quick 3D. They ship in the binary and require no network access.
 
 ## Orbital
 
@@ -9,3 +9,11 @@ Use case: stylized-concept. Asset: background texture behind a real-time 3D ches
 ## Woodland
 
 Use case: stylized-concept. Asset: background texture behind a real-time 3D chessboard in a premium desktop game. Generate a wide 3:2 enchanting woodland atmospheric backdrop ONLY. NO chessboard, NO chess pieces, NO table, NO text. Softly defocused sunlit forest, moss green and warm autumn gold, beautiful distant bokeh, delicate fern silhouettes along extreme side edges, a couple tiny mushrooms far lower corners. Middle and lower two thirds must be quiet dark muted olive-brown negative space to keep a separately rendered 3D board readable. High quality cinematic miniature diorama photography, gentle dappled light in upper corners, shallow depth of field, sophisticated cozy fantasy, not cartoon clutter.
+
+## Atelier
+
+Use case: stylized-concept. A cinematic wide 3:2 background behind a real-time chessboard: an old European woodworker’s atelier at dusk, walnut paneling, an arched window with blue evening light, an amber lamp and blurred tools around the outer edges. Warm brown and muted brass, softly defocused miniature photography. Keep the central and lower two thirds quiet and dark for the separately rendered board. No board, pieces, people, text or logos.
+
+## Candy
+
+Use case: stylized-concept. A wide 3:2 confectionery garden in pastel coral, cream and lilac, with distant meringue hills, candy-glass arches, curled sugar ribbons and delicate flowers around the upper and outer edges. Warm morning light, handmade miniature diorama photography and soft depth of field. Keep the central and lower two thirds quiet pale rose and mauve for the separately rendered board. No board, pieces, people, characters, text or logos.
