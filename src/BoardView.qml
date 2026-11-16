@@ -268,11 +268,4 @@ Item {
     }
     onWheel: wheel => { board.distance = Math.max(10.5, Math.min(board.farthest, board.distance - wheel.angleDelta.y / 600)) }
   }
-  Row {
-    anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 20 }
-    spacing: 24
-    Text { text: qsTr("Right-drag to orbit"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
-    Text { text: qsTr("Scroll to zoom"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
-    Text { text: qsTr("F · Flip board"); color: board.design === 3 ? "#30232c" : "#eee3cc"; opacity: .65; font.pixelSize: 11 }
-  }
 }

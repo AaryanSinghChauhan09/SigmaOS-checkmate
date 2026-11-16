@@ -24,6 +24,7 @@ The rules include castling, en passant, all four promotion choices, checkmate, s
 | F | Flip board |
 | R | Reset camera |
 | 1–4 | Switch piece set |
+| Tab | Show or hide the interface |
 | S | Settings |
 | ? | Show shortcuts |
 | Q | Quit |

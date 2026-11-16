@@ -897,6 +897,21 @@ private slots:
             QTest::keyClick(window,Qt::Key_B);
             QVERIFY(backend.sidebar());
             QTRY_COMPARE(board->width(),narrow);
+            // Tab clears the header and sidebar away for a bare board, and brings them back.
+            auto *header=window->findChild<QQuickItem *>("header");
+            QVERIFY(header && header->isVisible());
+            const qreal low=board->height();
+            QTest::keyClick(window,Qt::Key_Tab);
+            QTRY_VERIFY(!header->isVisible());
+            QVERIFY(!sidebar->isVisible());
+            QVERIFY(backend.sidebar());
+            QTRY_COMPARE(board->width(),qreal(window->width()));
+            QTRY_COMPARE(board->height(),qreal(window->height()));
+            QTest::keyClick(window,Qt::Key_Tab);
+            QTRY_VERIFY(header->isVisible());
+            QVERIFY(sidebar->isVisible());
+            QTRY_COMPARE(board->width(),narrow);
+            QTRY_COMPARE(board->height(),low);
         }
         board->setProperty("cursorSquare",28);
         QTest::keyClick(window,Qt::Key_F);
