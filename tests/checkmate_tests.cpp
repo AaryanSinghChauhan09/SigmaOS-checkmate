@@ -821,6 +821,25 @@ private slots:
             QCOMPARE(backend.pieceSet(),3);
             QTRY_VERIFY(!menu->property("visible").toBool());
             backend.setPieceSet(0);
+            // The keyboard works inside the open menu.
+            const QPoint pickerCenter=picker->mapToScene(QPointF(picker->width()/2,picker->height()/2)).toPoint();
+            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
+            QTRY_VERIFY(menu->property("opened").toBool());
+            QTest::keyClick(window,Qt::Key_Down);
+            QTest::keyClick(window,Qt::Key_Return);
+            QCOMPARE(backend.pieceSet(),1);
+            QTRY_VERIFY(!menu->property("visible").toBool());
+            backend.setPieceSet(0);
+            // The click that dismisses the menu never reaches the board, even over a legal destination.
+            backend.selectSquare(12);
+            QCOMPARE(backend.selected(),12);
+            QTest::mouseClick(window,Qt::LeftButton,{},pickerCenter);
+            QTRY_VERIFY(menu->property("opened").toBool());
+            for (const QPointF spot : {QPointF(.5,.5),QPointF(.5,.62),QPointF(.45,.7)})
+                QTest::mouseClick(window,Qt::LeftButton,{},board->mapToScene(QPointF(board->width()*spot.x(),board->height()*spot.y())).toPoint());
+            QTRY_VERIFY(!menu->property("visible").toBool());
+            QVERIFY(backend.moves().isEmpty());
+            backend.cancelSelection();
             // B hides the sidebar and hands its room to the board, and brings it back.
             auto *sidebar=window->findChild<QQuickItem *>("sidebar");
             QVERIFY(sidebar && sidebar->isVisible());

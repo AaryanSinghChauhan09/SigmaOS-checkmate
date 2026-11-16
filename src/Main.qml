@@ -67,7 +67,7 @@ ApplicationWindow {
     background: Rectangle {
       radius: theme.radius
       color: header.down ? Qt.alpha(header.tint,.2) : header.lit ? Qt.alpha(header.tint,header.hovered ? .2 : .13) : header.hovered ? Qt.alpha(theme.foreground,.07) : "transparent"
-      Behavior on color { ColorAnimation { duration: 120 } }
+      Behavior on color { enabled: !backend.reducedMotion; ColorAnimation { duration: 120 } }
     }
     contentItem: Text {
       text: header.text
@@ -110,7 +110,7 @@ ApplicationWindow {
             contentItem: RowLayout {
               spacing: 8
               Text { text: window.setNames[backend.pieceSet]; color: setPicker.hovered || setMenu.visible ? theme.foreground : window.muted; font.pixelSize: 12 }
-              Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { NumberAnimation { duration: 140 } } }
+              Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } } }
             }
             Popup {
               id: setMenu
@@ -120,8 +120,11 @@ ApplicationWindow {
               width: 268
               padding: 6
               focus: true
-              closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-              onOpened: setList.currentIndex = backend.pieceSet
+              // Modal without the dim, so the press that dismisses the menu never lands on the board and moves a piece.
+              modal: true
+              dim: false
+              closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+              onOpened: { setList.currentIndex = backend.pieceSet; setList.forceActiveFocus() }
               background: Rectangle { radius: theme.radius; color: theme.background; border.color: window.line }
               contentItem: ListView {
                 id: setList
@@ -190,7 +193,7 @@ ApplicationWindow {
                     width: 5
                     color: panelFrame.border.color
                     opacity: backend.sidebar ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 140 } }
+                    Behavior on opacity { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } }
                   }
                 }
               }
