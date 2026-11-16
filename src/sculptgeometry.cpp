@@ -4,15 +4,25 @@
 #include <QVector2D>
 #include <QVector3D>
 #include <QVector4D>
+#include <QtConcurrent>
 #include <algorithm>
 #include <map>
 
-SculptGeometry::SculptGeometry(QQuick3DObject *parent) : QQuick3DGeometry(parent) { rebuild(); }
-void SculptGeometry::setKind(int value) { if (m_kind != value) { m_kind=value; rebuild(); emit changed(); } }
-void SculptGeometry::setDesign(int value) { if (m_design != value) { m_design=value; rebuild(); emit changed(); } }
-void SculptGeometry::setPart(int value) { if (m_part != value) { m_part=value; rebuild(); emit changed(); } }
-void SculptGeometry::setTone(int value) { if (m_tone != value) { m_tone=value; rebuild(); emit changed(); } }
+// Nothing is sculpted for the defaults a geometry starts with: one made in code builds on its first setter,
+// and one declared in QML waits for the last of them, so neither casts a figure nobody asked for.
+SculptGeometry::SculptGeometry(QQuick3DObject *parent) : QQuick3DGeometry(parent) {}
+void SculptGeometry::setKind(int value) { const bool moved=m_kind != value; m_kind=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
+void SculptGeometry::setDesign(int value) { const bool moved=m_design != value; m_design=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
+void SculptGeometry::setPart(int value) { const bool moved=m_part != value; m_part=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
+void SculptGeometry::setTone(int value) { const bool moved=m_tone != value; m_tone=value; if (moved || !m_built) { rebuild(); if (moved) emit changed(); } }
+void SculptGeometry::componentComplete() {
+  QQuick3DGeometry::componentComplete();
+  m_declared=false;
+  rebuild();
+}
 void SculptGeometry::rebuild() {
+  if(m_declared) return;
+  m_built=true;
   // Sculpting takes a moment, so every part is made once and shared by all the pieces that wear it.
   struct Sculpture { QByteArray vertices, indices; QVector3D minimum, maximum; };
   static std::map<int,Sculpture> sculptures;
@@ -39,8 +49,23 @@ void SculptGeometry::rebuild() {
   const auto found=sculptures.find(key);
   if(found!=sculptures.end()) { upload(found->second); return; }
   // Moss & Myth figures are whole painted carvings; the other sets are cast part by part.
+  // A cast set is wanted whole the moment one part of it is, so its parts are cast side by side on every core
+  // rather than one after another while the window waits. Moss & Myth carves its six figures the same way.
+  static std::map<int,SculptFigure> cast;
+  static bool poured[4]={};
+  if(!woodland && m_part<4 && !poured[m_design]) {
+    poured[m_design]=true;
+    struct Job { int kind,part; SculptFigure figure; };
+    QList<Job> jobs;
+    for(int kind=1;kind<=6;++kind) for(int part=0;part<4;++part) jobs.append({kind,part,{}});
+    const int design=m_design;
+    QtConcurrent::blockingMap(jobs,[design](Job &job) { job.figure=Figures::part(design,job.kind,job.part); });
+    for(Job &job:jobs) cast.emplace((design*6+job.kind-1)*6+job.part,std::move(job.figure));
+  }
   SculptFigure figure;
-  if(!woodland) figure=Figures::part(m_design,m_kind,m_part);
+  const auto ready=cast.find((m_design*6+m_kind-1)*6+m_part);
+  if(!woodland && ready!=cast.end()) { figure=std::move(ready->second); cast.erase(ready); }
+  else if(!woodland) figure=Figures::part(m_design,m_kind,m_part);
   else if(m_part==0) figure=Woodland::figure(m_kind,m_tone);
   // A part a piece does not have is a single point, which draws nothing.
   if(figure.vertices.empty()) {

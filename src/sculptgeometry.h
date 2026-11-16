@@ -18,9 +18,13 @@ public:
   void setDesign(int value);
   void setPart(int value);
   void setTone(int value);
+  // A geometry declared in QML is built once, when all four of its properties are in.
+  void classBegin() override { m_declared = true; }
+  void componentComplete() override;
 signals:
   void changed();
 private:
   void rebuild();
   int m_kind = 1, m_design = 0, m_part = 0, m_tone = 0;
+  bool m_declared = false, m_built = false;
 };
