@@ -12,7 +12,10 @@ Node {
   required property bool selected
   required property real seat
   property real lift: 0
-  property real presence: record.alive ? 1 : 0
+  // Followed by hand, like `place`, so a capture can be timed to its captor's arrival.
+  property bool alive: record.alive
+  property real presence: 0
+  property int reprieve: 0
   property bool ready: false
   // Moss & Myth is one carved figure per piece, painted in its mesh rather than by part.
   property bool woodland: design === 2
@@ -126,7 +129,7 @@ Node {
   Behavior on presence {
     id: presenceBehavior; enabled: piece.ready && piece.motion
     SequentialAnimation {
-      PauseAnimation { duration: piece.record.alive ? 0 : 240 }
+      PauseAnimation { duration: piece.reprieve }
       NumberAnimation { duration: piece.manner.fade; easing.type: piece.manner.pop && !piece.record.alive ? Easing.InBack : Easing.InCubic }
     }
   }
@@ -134,14 +137,13 @@ Node {
     if (!motion) {
       xBehavior.enabled = false; zBehavior.enabled = false
       raiseBehavior.enabled = false; lookBehavior.enabled = false; presenceBehavior.enabled = false
-      leap.stop(); perk.stop(); glance.stop(); skip.stop()
-      lift = 0; stretch = 1; lean = 0; wiggle = 0
+      compose()
       // Resolve moves queued before the first animation frame as well.
       x = Qt.binding(function() { return piece.place % 8 - 3.5 })
       z = Qt.binding(function() { return 3.5 - Math.floor(piece.place / 8) })
       raise = Qt.binding(function() { return piece.selected ? piece.manner.raise : 0 })
       look = Qt.binding(function() { return piece.regard() })
-      presence = Qt.binding(function() { return piece.record.alive ? 1 : 0 })
+      presence = alive ? 1 : 0
       xBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
       zBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
       raiseBehavior.enabled = Qt.binding(function() { return piece.ready && piece.motion })
@@ -160,14 +162,28 @@ Node {
         let turn = eulerRotation.y * Math.PI / 180
         leanX = (dx * Math.cos(turn) - dz * Math.sin(turn)) / reach
         leanZ = (dx * Math.sin(turn) + dz * Math.cos(turn)) / reach
-        perk.stop(); skip.stop()
+        // The journey takes over whatever pose an interrupted stir left behind.
+        perk.stop(); skip.stop(); glance.stop()
         leap.restart()
       }
     }
     place = square
   }
+  onAliveChanged: {
+    // The captor's journey is the last move's; the taken figure starts to go just before it lands.
+    let from = backend.lastFrom, to = backend.lastTo
+    let reach = from < 0 ? 0 : Math.hypot(to % 8 - from % 8, Math.floor(to / 8) - Math.floor(from / 8))
+    reprieve = alive ? 0 : Math.max(0, manner.windup + Math.min(manner.pace + 320, manner.pace + manner.pacePer * reach) - manner.fade * .4)
+    presence = alive ? 1 : 0
+  }
   onSelectedChanged: if (selected && motion && ready) { skip.stop(); glance.stop(); perk.restart() }
-  Component.onCompleted: { place = square; ready = true }
+  // A new set starts from rest rather than finishing the last one's gesture.
+  onDesignChanged: compose()
+  Component.onCompleted: { place = square; presence = alive ? 1 : 0; ready = true }
+  function compose() {
+    leap.stop(); perk.stop(); glance.stop(); skip.stop()
+    lift = 0; stretch = 1; lean = 0; wiggle = 0
+  }
   // Now and then the board asks an idle figure to stir: a look to one side, or a small skip from the sweets, the young and the foxes.
   function fidget() {
     if (!motion || !record.alive || liveliness < 1 || selected || look !== 0) return
@@ -194,6 +210,7 @@ Node {
         NumberAnimation { target: piece; property: "lean"; to: piece.manner.lean; duration: piece.travel * .35; easing.type: Easing.OutQuad }
         NumberAnimation { target: piece; property: "lean"; to: piece.manner.counter; duration: piece.travel * .65; easing.type: Easing.InOutQuad }
       }
+      NumberAnimation { target: piece; property: "wiggle"; to: 0; duration: piece.travel * .5; easing.type: Easing.OutQuad }
     }
     ParallelAnimation {
       SequentialAnimation {
@@ -212,6 +229,7 @@ Node {
   ParallelAnimation {
     id: perk
     objectName: "perk"
+    NumberAnimation { target: piece; property: "lift"; to: 0; duration: 150; easing.type: Easing.OutQuad }
     SequentialAnimation {
       NumberAnimation { target: piece; property: "stretch"; to: piece.manner.start; duration: 70; easing.type: Easing.OutQuad }
       NumberAnimation { target: piece; property: "stretch"; to: piece.manner.reach; duration: 150; easing.type: Easing.OutQuad }

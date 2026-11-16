@@ -847,6 +847,13 @@ private slots:
             QVERIFY(perk->property("running").toBool());
             const double raised=std::vector<double>{.2,.14,.17,.17}[set];
             QTRY_VERIFY(qAbs(pawn->property("raise").toDouble()-raised)<.001);
+            // A move made mid-shake, or a pick-up mid-skip, leaves nothing of the interrupted pose behind.
+            pawn->setProperty("wiggle",8.0);
+            pawn->setProperty("lift",.05);
+            backend.selectSquare(12);
+            backend.selectSquare(12);
+            QTRY_COMPARE(pawn->property("lift").toDouble(),0.0);
+            pawn->setProperty("wiggle",8.0);
             QVERIFY(backend.move(12,28));
             QVERIFY(leap->property("running").toBool());
             QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
@@ -862,7 +869,22 @@ private slots:
             QCOMPARE(pawn->property("lean").toDouble(),0.0);
             QCOMPARE(pawn->property("stretch").toDouble(),1.0);
             QCOMPARE(pawn->property("lift").toDouble(),0.0);
+            QCOMPARE(pawn->property("wiggle").toDouble(),0.0);
+            // A long capture is waited out: the taken piece is still whole when a short one would already have gone.
+            QVERIFY(backend.move(59,35));
+            auto *queen=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[35].id));
+            auto *far=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[7].id));
+            QVERIFY(queen && far);
+            QVERIFY(backend.move(14,22));
+            QVERIFY(backend.move(35,7));
+            QVERIFY(far->property("reprieve").toInt()>taken->property("reprieve").toInt()+150);
+            QCOMPARE(far->property("presence").toDouble(),1.0);
+            // Changing sets mid-journey starts the new one from rest.
+            backend.setPieceSet((set+1)%4);
+            QVERIFY(!queen->findChild<QObject *>("leap")->property("running").toBool());
+            QCOMPARE(queen->property("lean").toDouble(),0.0);
             backend.setReducedMotion(true);
+            QCOMPARE(far->property("presence").toDouble(),0.0);
         }
         // Moss & Myth is alive: it breathes, perks up in the hand, draws its neighbours' eyes, and leaps.
         backend.newGame(false,0);
