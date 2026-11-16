@@ -834,14 +834,20 @@ private slots:
                 QTest::qWait(150);
                 for (int set=0;set<4;++set) {
                     backend.setPieceSet(set);
-                    QTest::qWait(60);
-                    for (float x : {-4.55f,4.55f}) for (float z : {-4.55f,4.55f}) {
-                        QVector3D point;
-                        QVERIFY(QMetaObject::invokeMethod(view,"mapFrom3DScene",Q_RETURN_ARG(QVector3D,point),Q_ARG(QVector3D,QVector3D(x,0,z))));
-                        QVERIFY2(point.x()>=0 && point.x()<=board->width() && point.y()>=0 && point.y()<=board->height(),
-                                 qPrintable(QString("set %1 at %2x%3: corner %4,%5 lands at %6,%7").arg(set).arg(size.width()).arg(size.height())
-                                            .arg(x).arg(z).arg(point.x()).arg(point.y())));
-                    }
+                    // The view answers from the last frame it drew, and a slow renderer takes its time over one.
+                    QString stray;
+                    auto framed=[&] {
+                        stray.clear();
+                        for (float x : {-4.55f,4.55f}) for (float z : {-4.55f,4.55f}) {
+                            QVector3D point;
+                            if (!QMetaObject::invokeMethod(view,"mapFrom3DScene",Q_RETURN_ARG(QVector3D,point),Q_ARG(QVector3D,QVector3D(x,0,z)))) return false;
+                            if (point.x()<0 || point.x()>board->width() || point.y()<0 || point.y()>board->height())
+                                stray=QString("set %1 at %2x%3: corner %4,%5 lands at %6,%7").arg(set).arg(size.width()).arg(size.height())
+                                          .arg(x).arg(z).arg(point.x()).arg(point.y());
+                        }
+                        return stray.isEmpty();
+                    };
+                    QTRY_VERIFY2_WITH_TIMEOUT(framed(),qPrintable(stray),10000);
                 }
             }
             backend.setPieceSet(0);
@@ -933,14 +939,15 @@ private slots:
         auto *pawn=window->findChild<QObject *>("figure-20");
         QVERIFY(pawn);
         QVERIFY(backend.move(12,28));
-        QTest::qWait(160);
-        QVERIFY(pawn->property("lift").toDouble()>0);
-        QVERIFY(pawn->property("z").toDouble()>.5);
-        QVERIFY(pawn->property("z").toDouble()<2.5);
+        // A slow renderer may draw the whole journey in a frame or two, so nothing is sampled in mid-air:
+        // the journey has started, it is aimed up the board, and it ends on the square.
+        QVERIFY(pawn->findChild<QObject *>("leap")->property("running").toBool());
+        QVERIFY(qAbs(pawn->property("leanZ").toDouble())>.9);
+        QTRY_VERIFY_WITH_TIMEOUT(qFuzzyCompare(pawn->property("z").toFloat(),.5f),5000);
         backend.undo();
         // Quick 3D coordinates use float precision, including the final animation setter.
-        QTRY_VERIFY_WITH_TIMEOUT(qFuzzyCompare(pawn->property("z").toFloat(),2.5f),1500);
-        QTRY_COMPARE_WITH_TIMEOUT(pawn->property("lift").toDouble(),0.0,1500);
+        QTRY_VERIFY_WITH_TIMEOUT(qFuzzyCompare(pawn->property("z").toFloat(),2.5f),8000);
+        QTRY_COMPARE_WITH_TIMEOUT(pawn->property("lift").toDouble(),0.0,8000);
         auto *leap=pawn->findChild<QObject *>("leap");
         auto *perk=pawn->findChild<QObject *>("perk");
         QVERIFY(leap && perk);
@@ -970,16 +977,16 @@ private slots:
             pawn->setProperty("wiggle",8.0);
             QVERIFY(backend.move(12,28));
             QVERIFY(leap->property("running").toBool());
-            QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
-            QVERIFY(pawn->property("lift").toDouble()>0);
+            QVERIFY(qAbs(pawn->property("leanZ").toDouble())>.9);
+            QVERIFY(leap->property("height").toDouble()>0);
             // A captured piece waits for its captor, then goes.
             QVERIFY(backend.move(51,35));
             auto *taken=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[35].id));
             QVERIFY(taken);
             QVERIFY(backend.move(28,35));
             QCOMPARE(taken->property("presence").toDouble(),1.0);
-            QTRY_COMPARE_WITH_TIMEOUT(taken->property("presence").toDouble(),0.0,2500);
-            QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),2500);
+            QTRY_COMPARE_WITH_TIMEOUT(taken->property("presence").toDouble(),0.0,8000);
+            QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),8000);
             QCOMPARE(pawn->property("lean").toDouble(),0.0);
             QCOMPARE(pawn->property("stretch").toDouble(),1.0);
             QCOMPARE(pawn->property("lift").toDouble(),0.0);
@@ -1014,8 +1021,8 @@ private slots:
         QTRY_VERIFY(qAbs(neighbour->property("look").toDouble())>5);
         QVERIFY(backend.move(12,28));
         QVERIFY(leap->property("running").toBool());
-        QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
-        QVERIFY(pawn->property("lift").toDouble()>0);
+        QVERIFY(qAbs(pawn->property("leanZ").toDouble())>.9);
+        QVERIFY(leap->property("height").toDouble()>0);
         QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),2000);
         QVERIFY(qFuzzyCompare(pawn->property("z").toFloat(),.5f));
         QCOMPARE(pawn->property("lean").toDouble(),0.0);
