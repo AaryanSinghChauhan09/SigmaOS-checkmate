@@ -145,11 +145,7 @@ void Backend::setPieceSet(int value) {
 }
 void Backend::setReducedMotion(bool value) {
   if (value == m_reducedMotion) return;
-  m_reducedMotion = value; emit preferencesChanged(); save();
-}
-void Backend::setAutoRotate(bool value) {
-  if (value == m_autoRotate) return;
-  m_autoRotate = value; emit preferencesChanged(); save();
+  m_reducedMotion = value; emit preferencesChanged();
 }
 void Backend::setMovesOpen(bool value) {
   if (value == m_movesOpen) return;
@@ -160,7 +156,7 @@ void Backend::save() {
   QJsonArray moves;
   for (auto m : m_moves) moves.append(QJsonArray{m.from,m.to,m.promotion});
   QJsonObject data{{"version",1},{"moves",moves},{"computer",m_computer},{"humanWhite",m_humanWhite},
-                   {"difficulty",m_difficulty},{"pieceSet",m_pieceSet},{"reducedMotion",m_reducedMotion},{"autoRotate",m_autoRotate},{"movesOpen",m_movesOpen}};
+                   {"difficulty",m_difficulty},{"pieceSet",m_pieceSet},{"movesOpen",m_movesOpen}};
   QDir().mkpath(QFileInfo(m_savePath).absolutePath());
   QSaveFile file(m_savePath);
   file.setDirectWriteFallback(false);
@@ -201,5 +197,5 @@ void Backend::restore() {
   }
   m_computer = data["computer"].toBool(true); m_humanWhite = data["humanWhite"].toBool(true);
   m_difficulty = std::clamp(data["difficulty"].toInt(1),0,2); m_pieceSet = std::clamp(data["pieceSet"].toInt(),0,3);
-  m_reducedMotion = data["reducedMotion"].toBool(); m_autoRotate = data["autoRotate"].toBool(); m_movesOpen = data["movesOpen"].toBool();
+  m_movesOpen = data["movesOpen"].toBool();
 }

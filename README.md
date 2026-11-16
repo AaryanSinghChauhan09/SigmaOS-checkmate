@@ -6,7 +6,7 @@
 
 ![The four sets: Orbital Orders, Midnight Atelier, Moss & Myth and Candy Kingdom](screenshots/sets.webp)
 
-Every set moves in its own manner. Orbital Orders hovers, banks into a glide and scans when chosen. Midnight Atelier is handled under flickering candlelight and tipped over when taken. Moss & Myth breathes, turns to watch a neighbour being picked, and leaps. Candy Kingdom wobbles like jelly and pops. Reduced motion is in Settings.
+Every set moves in its own manner. Orbital Orders hovers, banks into a glide and scans when chosen. Midnight Atelier is handled under flickering candlelight and tipped over when taken. Moss & Myth breathes, turns to watch a neighbour being picked, and leaps. Candy Kingdom wobbles like jelly and pops.
 
 ## Play
 
@@ -24,7 +24,6 @@ Click a piece, then a highlighted square. Right-drag to orbit the board and scro
 | 1–4 | Switch piece set |
 | B | Show or hide the moves |
 | Tab | Show or hide the interface |
-| S | Settings |
 | ? | Show shortcuts |
 | Q | Quit |
 

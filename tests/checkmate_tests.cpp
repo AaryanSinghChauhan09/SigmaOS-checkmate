@@ -453,7 +453,8 @@ private slots:
         QCOMPARE(restored.fen(),fen);
         QCOMPARE(restored.moves(),QStringList({"e4","e5"}));
         QCOMPARE(restored.pieceSet(),3);
-        QVERIFY(restored.reducedMotion());
+        // Stilled motion is a test's switch, not a preference, so it does not come back with the game.
+        QVERIFY(!restored.reducedMotion());
         QVERIFY(restored.movesOpen());
         QVERIFY(!Backend(dir.filePath("fresh.json")).movesOpen());
         restored.undo();
@@ -868,7 +869,7 @@ private slots:
                 return nullptr;
             };
             auto press=[&](QQuickItem *item) { QTest::mouseClick(window,Qt::LeftButton,{},item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint()); };
-            for (const char *name : {"wordmark","set-0","set-3","movesButton","undoButton","settingsButton","newGameButton","status"}) {
+            for (const char *name : {"wordmark","set-0","set-3","movesButton","undoButton","newGameButton","status"}) {
                 auto *control=find(window->contentItem(),name);
                 QVERIFY2(control && control->isVisible(),name);
                 const QPointF corner=control->mapToItem(footer,QPointF(0,0));
@@ -958,14 +959,14 @@ private slots:
         QCOMPARE(board->property("cursorSquare").toInt(),27);
         QTest::keyClick(window,Qt::Key_R);
 
-        backend.setAutoRotate(true);
+        // The board keeps its seat through a two-player game; only the player turns it.
         QVERIFY(backend.move(12,28));
-        QCOMPARE(board->property("azimuth").toDouble(),180.0);
+        QCOMPARE(board->property("azimuth").toDouble(),0.0);
         board->setProperty("manualAzimuth",30.0);
         backend.selectSquare(52);
-        QCOMPARE(board->property("azimuth").toDouble(),210.0);
-        backend.setAutoRotate(false);
+        QCOMPARE(board->property("azimuth").toDouble(),30.0);
         QTest::keyClick(window,Qt::Key_R);
+        QCOMPARE(board->property("azimuth").toDouble(),0.0);
         backend.newGame(false,0);
         backend.setReducedMotion(false);
         QTest::qWait(450);

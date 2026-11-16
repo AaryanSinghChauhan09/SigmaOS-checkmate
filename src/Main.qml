@@ -29,7 +29,7 @@ ApplicationWindow {
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
   // Tab clears the footer and the moves away so only the board is left; they come back with every launch.
   property bool chrome: true
-  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible
+  property bool modalOpen: newGameDialog.visible || helpDialog.visible || promotionDialog.visible
   function statusText() {
     if (backend.outcome === "white-wins") return qsTr("White wins by checkmate")
     if (backend.outcome === "black-wins") return qsTr("Black wins by checkmate")
@@ -211,7 +211,6 @@ ApplicationWindow {
           spacing: 2
           FooterIcon { objectName: "movesButton"; name: qsTr("Moves"); key: "B"; path: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"; lit: backend.movesOpen; onClicked: backend.movesOpen = !backend.movesOpen }
           FooterIcon { objectName: "undoButton"; name: qsTr("Undo"); key: "Ctrl+Z"; path: "M8 5L3.5 9.5L8 14M3.5 9.5H14a5 5 0 0 1 0 10h-3"; enabled: backend.canUndo; onClicked: backend.undo() }
-          FooterIcon { objectName: "settingsButton"; name: qsTr("Settings"); key: "S"; path: "M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5v5M9 14.5v5"; onClicked: settingsDialog.open() }
           FooterIcon { objectName: "newGameButton"; name: qsTr("New game"); key: "N"; path: "M12 5v14M5 12h14"; lit: true; Layout.leftMargin: 4; Layout.rightMargin: 4; onClicked: newGameDialog.open() }
         }
       }
@@ -308,29 +307,6 @@ ApplicationWindow {
     }
   }
   Dialog {
-    id: settingsDialog
-    anchors.centerIn: parent
-    width: 400
-    modal: true
-    focus: true
-    title: qsTr("Make yourself comfortable")
-    footer: DialogButtonBox {
-      LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      LayoutMirroring.childrenInherit: true
-      Button { text: qsTr("Close"); DialogButtonBox.buttonRole: DialogButtonBox.RejectRole; Material.roundedScale: theme.radius }
-      onRejected: settingsDialog.close()
-    }
-    Material.roundedScale: theme.radius
-    contentItem: ColumnLayout {
-      LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      LayoutMirroring.childrenInherit: true
-      CheckBox { text: qsTr("Reduced motion"); checked: backend.reducedMotion; onToggled: backend.reducedMotion = checked }
-      CheckBox { text: qsTr("Turn the board for each player"); checked: backend.autoRotate; onToggled: backend.autoRotate = checked }
-      Label { text: qsTr("Automatic rotation applies to two-player games."); color: window.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-      FlatButton { text: qsTr("Reset camera"); Layout.fillWidth: true; onClicked: board.resetCamera() }
-    }
-  }
-  Dialog {
     id: helpDialog
     objectName: "help"
     anchors.centerIn: parent
@@ -347,7 +323,7 @@ ApplicationWindow {
     Material.roundedScale: theme.radius
     contentItem: Label {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the moves\nTab  ·  Show or hide the interface\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
+      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the moves\nTab  ·  Show or hide the interface\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
       wrapMode: Text.WordWrap
       lineHeight: 1.4
     }
@@ -388,7 +364,6 @@ ApplicationWindow {
     }
   }
   Shortcut { sequence: "?"; enabled: !window.modalOpen; onActivated: helpDialog.open() }
-  Shortcut { sequence: "S"; enabled: !window.modalOpen; onActivated: settingsDialog.open() }
   Shortcut { sequence: "Q"; enabled: !window.modalOpen; onActivated: window.close() }
   Shortcut { sequence: "N"; enabled: !window.modalOpen; onActivated: newGameDialog.open() }
   Shortcut { sequences: [StandardKey.Undo]; enabled: !window.modalOpen; onActivated: backend.undo() }
