@@ -836,6 +836,43 @@ private slots:
         QCOMPARE(pawn->property("lift").toDouble(),0.0);
         QCOMPARE(pawn->property("z").toDouble(),.5);
 
+        // Moss & Myth is alive: it breathes, perks up in the hand, draws its neighbours' eyes, and leaps.
+        backend.newGame(false,0);
+        backend.setPieceSet(2);
+        backend.setReducedMotion(false);
+        QTRY_VERIFY(board->property("clock").toDouble()>0);
+        QTRY_VERIFY(qAbs(pawn->property("tall").toDouble()-1)>.002);
+        auto *neighbour=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[11].id));
+        auto *leap=pawn->findChild<QObject *>("leap");
+        auto *perk=pawn->findChild<QObject *>("perk");
+        QVERIFY(neighbour && leap && perk);
+        backend.selectSquare(12);
+        QVERIFY(perk->property("running").toBool());
+        QTRY_VERIFY(qAbs(pawn->property("raise").toDouble()-.17)<.001);
+        QTRY_VERIFY(qAbs(neighbour->property("look").toDouble())>5);
+        QVERIFY(backend.move(12,28));
+        QVERIFY(leap->property("running").toBool());
+        QVERIFY(!hop->property("running").toBool());
+        QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
+        QVERIFY(pawn->property("lift").toDouble()>0);
+        QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),2000);
+        QVERIFY(qFuzzyCompare(pawn->property("z").toFloat(),.5f));
+        QCOMPARE(pawn->property("lean").toDouble(),0.0);
+        QCOMPARE(pawn->property("stretch").toDouble(),1.0);
+        QTRY_COMPARE(neighbour->property("look").toDouble(),0.0);
+        // Reduced motion stills a leap in flight and every idle stir with it.
+        backend.undo();
+        QVERIFY(leap->property("running").toBool());
+        backend.selectSquare(11);
+        backend.setReducedMotion(true);
+        QVERIFY(!leap->property("running").toBool());
+        QCOMPARE(pawn->property("tall").toDouble(),1.0);
+        QCOMPARE(pawn->property("look").toDouble(),0.0);
+        QCOMPARE(pawn->property("z").toDouble(),2.5);
+        QCOMPARE(pawn->property("y").toFloat(),.12f);
+        QCOMPARE(neighbour->property("y").toFloat(),.29f);
+        backend.setPieceSet(3);
+
         backend.newGame(false,0);
         QTest::qWait(100);
         auto *scene=window->findChild<QObject *>("scene");

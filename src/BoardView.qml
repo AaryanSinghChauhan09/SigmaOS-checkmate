@@ -21,6 +21,14 @@ Item {
   property var frames: ["#28343f", "#432b22", "#5b4934", "#f0dccb"]
   property var accents: ["#dcad62", "#cba265", "#9baa6b", "#dca6ab"]
   property bool sceneReady: false
+  // Moss & Myth keeps time for its figures: they breathe, stir and watch one another while the window has the player's attention.
+  property bool lively: motion && design === 2
+  property real clock: 0
+  FrameAnimation { running: board.lively; onTriggered: board.clock += frameTime }
+  Timer {
+    interval: 1700; repeat: true; running: board.lively
+    onTriggered: if (Math.random() < .75) figures.objectAt(Math.floor(Math.random() * 32)).fidget()
+  }
   Component.onCompleted: Qt.callLater(function() { sceneReady = true })
   clip: true
   focus: true
@@ -159,12 +167,15 @@ Item {
           source: "#Cylinder"
           visible: parent.target
           y: 56
-          scale: Qt.vector3d(.23,1.1,.23)
+          // Woodland markers swell and settle like something growing.
+          property real swell: board.lively && visible ? .23 * (1 + .09 * Math.sin(board.clock * 3.1 + tile.index)) : .23
+          scale: Qt.vector3d(swell,1.1,swell)
           materials: PrincipledMaterial { baseColor: board.accents[board.design]; opacity: .8; lighting: PrincipledMaterial.NoLighting }
         }
       }
     }
     Repeater3D {
+      id: figures
       model: 32
       ChessPiece {
         required property int index
@@ -173,6 +184,8 @@ Item {
         design: board.design
         seat: board.seat
         motion: board.motion
+        clock: board.clock
+        attention: backend.selected
         selected: backend.selected === record.square && record.alive
       }
     }
