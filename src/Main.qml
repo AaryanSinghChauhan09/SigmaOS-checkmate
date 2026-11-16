@@ -25,7 +25,7 @@ ApplicationWindow {
   property var setDescriptions: [qsTr("Across the stars"),qsTr("Wood, ivory & brass"),qsTr("A woodland tale"),qsTr("A little sweetness")]
   property var setColors: ["#d9ad69","#c99b6b","#93a775","#db9eb2"]
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
-  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible
+  property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible || setMenu.visible
   function statusText() {
     if (backend.outcome === "white-wins") return qsTr("White wins by checkmate")
     if (backend.outcome === "black-wins") return qsTr("Black wins by checkmate")
@@ -55,6 +55,28 @@ ApplicationWindow {
       verticalAlignment: Text.AlignVCenter
     }
   }
+  // Quiet toolbar buttons for the header: no outline, a soft fill on hover, and no Material insets so every one stands the same height.
+  component HeaderButton: Button {
+    id: header
+    property bool lit: false
+    property color tint: theme.foreground
+    implicitHeight: 34
+    topInset: 0; bottomInset: 0; leftInset: 0; rightInset: 0
+    leftPadding: 14; rightPadding: 14
+    font.pixelSize: 13
+    background: Rectangle {
+      radius: theme.radius
+      color: header.down ? Qt.alpha(header.tint,.2) : header.lit ? Qt.alpha(header.tint,header.hovered ? .2 : .13) : header.hovered ? Qt.alpha(theme.foreground,.07) : "transparent"
+      Behavior on color { ColorAnimation { duration: 120 } }
+    }
+    contentItem: Text {
+      text: header.text
+      color: header.lit || header.hovered ? theme.foreground : Qt.alpha(theme.foreground,.72)
+      font: header.font
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
+    }
+  }
   Item {
     anchors.fill: parent
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
@@ -72,10 +94,109 @@ ApplicationWindow {
           Text { text: "♔"; color: window.setColors[backend.pieceSet]; font.pixelSize: 32 }
           Text { text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 29 }
           Rectangle { Layout.leftMargin: 12; width: 1; height: 22; color: window.line }
-          Text { text: window.setNames[backend.pieceSet]; color: window.muted; font.pixelSize: 12; Layout.fillWidth: true }
-          FlatButton { objectName: "newGameButton"; text: qsTr("+  New game"); onClicked: newGameDialog.open() }
-          FlatButton { text: qsTr("Settings"); onClicked: settingsDialog.open() }
-          FlatButton { text: "?"; implicitWidth: 38; Accessible.name: qsTr("Keyboard shortcuts"); onClicked: helpDialog.open() }
+          Button {
+            id: setPicker
+            objectName: "setPicker"
+            Accessible.name: qsTr("Piece set")
+            Accessible.description: window.setNames[backend.pieceSet]
+            implicitHeight: 38
+            leftPadding: 10
+            rightPadding: 10
+            onClicked: setMenu.visible ? setMenu.close() : setMenu.open()
+            background: Rectangle {
+              radius: theme.radius
+              color: setMenu.visible ? Qt.alpha(theme.foreground,.07) : setPicker.hovered ? Qt.alpha(theme.foreground,.05) : "transparent"
+            }
+            contentItem: RowLayout {
+              spacing: 8
+              Text { text: window.setNames[backend.pieceSet]; color: setPicker.hovered || setMenu.visible ? theme.foreground : window.muted; font.pixelSize: 12 }
+              Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { NumberAnimation { duration: 140 } } }
+            }
+            Popup {
+              id: setMenu
+              objectName: "setMenu"
+              y: setPicker.height + 6
+              x: setPicker.mirrored ? setPicker.width - width : 0
+              width: 268
+              padding: 6
+              focus: true
+              closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+              onOpened: setList.currentIndex = backend.pieceSet
+              background: Rectangle { radius: theme.radius; color: theme.background; border.color: window.line }
+              contentItem: ListView {
+                id: setList
+                implicitHeight: contentHeight
+                interactive: false
+                spacing: 2
+                model: 4
+                keyNavigationEnabled: true
+                highlightFollowsCurrentItem: false
+                Keys.onReturnPressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                Keys.onEnterPressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                Keys.onSpacePressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                delegate: ItemDelegate {
+                  id: setButton
+                  required property int index
+                  width: ListView.view.width
+                  height: 54
+                  objectName: "set-" + index
+                  Accessible.name: window.setNames[index]
+                  onClicked: { backend.pieceSet = index; setMenu.close() }
+                  background: Rectangle {
+                    radius: theme.radius
+                    color: backend.pieceSet === setButton.index ? Qt.alpha(window.setColors[setButton.index],.1) : setButton.hovered || setButton.ListView.isCurrentItem && setList.activeFocus ? Qt.alpha(theme.foreground,.05) : "transparent"
+                  }
+                  contentItem: RowLayout {
+                    spacing: 12
+                    Text { text: ["◎","♞","❧","♛"][setButton.index]; color: window.setColors[setButton.index]; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 28; Layout.leftMargin: 2 }
+                    ColumnLayout {
+                      Layout.fillWidth: true
+                      spacing: 3
+                      Text { text: window.setNames[setButton.index]; color: theme.foreground; font.pixelSize: 12; font.bold: true; Layout.fillWidth: true }
+                      Text { text: window.setDescriptions[setButton.index]; color: window.muted; font.pixelSize: 10; Layout.fillWidth: true }
+                    }
+                    Text { text: (setButton.index + 1).toLocaleString(Qt.locale(),'f',0); color: window.muted; font.pixelSize: 10; visible: backend.pieceSet !== setButton.index }
+                    Text { text: "✓"; color: window.setColors[setButton.index]; visible: backend.pieceSet === setButton.index; Layout.rightMargin: 4 }
+                  }
+                }
+              }
+            }
+          }
+          Item { Layout.fillWidth: true }
+          RowLayout {
+            spacing: 4
+            HeaderButton { objectName: "newGameButton"; text: qsTr("+  New game"); lit: true; tint: window.setColors[backend.pieceSet]; onClicked: newGameDialog.open() }
+            HeaderButton { text: qsTr("Settings"); onClicked: settingsDialog.open() }
+            HeaderButton {
+              id: sidebarButton
+              objectName: "sidebarButton"
+              implicitWidth: 34
+              Accessible.name: backend.sidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar")
+              ToolTip.visible: hovered
+              ToolTip.delay: 600
+              ToolTip.text: Accessible.name + "  ·  B"
+              onClicked: backend.sidebar = !backend.sidebar
+              // A small panel glyph whose side column fills in while the sidebar is showing.
+              contentItem: Item {
+                Rectangle {
+                  id: panelFrame
+                  anchors.centerIn: parent
+                  width: 16; height: 13; radius: 2
+                  color: "transparent"
+                  border.width: 1.5
+                  border.color: sidebarButton.hovered || backend.sidebar ? theme.foreground : Qt.alpha(theme.foreground,.72)
+                  Rectangle {
+                    anchors { top: parent.top; bottom: parent.bottom; right: parent.right; margins: 1.5 }
+                    width: 5
+                    color: panelFrame.border.color
+                    opacity: backend.sidebar ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 140 } }
+                  }
+                }
+              }
+            }
+            HeaderButton { text: "?"; implicitWidth: 34; font.pixelSize: 14; Accessible.name: qsTr("Keyboard shortcuts"); onClicked: helpDialog.open() }
+          }
         }
       }
       Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
@@ -84,8 +205,10 @@ ApplicationWindow {
         Layout.fillHeight: true
         spacing: 0
         BoardView { id: board; objectName: "board"; Layout.fillWidth: true; Layout.fillHeight: true }
-        Rectangle { Layout.fillHeight: true; width: 1; color: window.line }
+        Rectangle { Layout.fillHeight: true; width: 1; color: window.line; visible: backend.sidebar }
         Rectangle {
+          objectName: "sidebar"
+          visible: backend.sidebar
           Layout.preferredWidth: window.width < 1100 ? 264 : 298
           Layout.fillHeight: true
           color: Qt.alpha(theme.foreground,.018)
@@ -150,44 +273,6 @@ ApplicationWindow {
             }
             FlatButton { objectName: "undoButton"; text: qsTr("↶  Undo move"); Layout.fillWidth: true; enabled: backend.canUndo; onClicked: backend.undo() }
             Text { text: backend.saveHealthy ? qsTr("Saved automatically · No time limit") : qsTr("Game is not being saved"); font.pixelSize: 10; color: window.muted; Layout.alignment: Qt.AlignHCenter }
-          }
-        }
-      }
-      Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
-      Rectangle {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 104
-        color: theme.background
-        RowLayout {
-          anchors { fill: parent; leftMargin: 24; rightMargin: 24; topMargin: 14; bottomMargin: 14 }
-          spacing: 12
-          Repeater {
-            model: 4
-            Button {
-              id: setButton
-              required property int index
-              Layout.fillWidth: true
-              Layout.fillHeight: true
-              objectName: "set-" + index
-              Accessible.name: window.setNames[index]
-              onClicked: backend.pieceSet = index
-              background: Rectangle {
-                radius: theme.radius
-                color: backend.pieceSet === setButton.index ? Qt.alpha(window.setColors[setButton.index],.1) : setButton.hovered ? Qt.alpha(theme.foreground,.04) : "transparent"
-                border.color: backend.pieceSet === setButton.index ? window.setColors[setButton.index] : window.line
-              }
-              contentItem: RowLayout {
-                spacing: 12
-                Text { text: ["◎","♞","❧","♛"][setButton.index]; color: window.setColors[setButton.index]; font.pixelSize: 30; Layout.leftMargin: 12 }
-                ColumnLayout {
-                  Layout.fillWidth: true
-                  spacing: 5
-                  Text { text: window.setNames[setButton.index]; color: theme.foreground; font.pixelSize: 12; font.bold: true }
-                  Text { text: window.setDescriptions[setButton.index]; color: window.muted; font.pixelSize: 10; visible: window.width > 1050 }
-                }
-                Text { text: backend.pieceSet === setButton.index ? "✓" : ""; color: window.setColors[setButton.index]; Layout.rightMargin: 10 }
-              }
-            }
           }
         }
       }
@@ -281,7 +366,7 @@ ApplicationWindow {
     Material.roundedScale: theme.radius
     contentItem: Label {
       LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
-      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
+      text: qsTr("Click a piece, then a highlighted square.\n\nArrow keys  ·  Navigate the board\nSpace / Enter  ·  Select or move\nEscape  ·  Cancel selection\nCtrl+Z  ·  Undo\nN  ·  New game\nF  ·  Flip board\nR  ·  Reset camera\n1–4  ·  Piece set\nB  ·  Show or hide the sidebar\nS  ·  Settings\n?  ·  Keyboard shortcuts\nQ  ·  Quit (your game is saved)\n\nRight-drag to orbit. Scroll to zoom.")
       wrapMode: Text.WordWrap
       lineHeight: 1.4
     }
@@ -331,6 +416,7 @@ ApplicationWindow {
   Shortcut { sequence: "2"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 1 }
   Shortcut { sequence: "3"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 2 }
   Shortcut { sequence: "4"; enabled: !window.modalOpen; onActivated: backend.pieceSet = 3 }
+  Shortcut { sequence: "B"; enabled: !window.modalOpen; onActivated: backend.sidebar = !backend.sidebar }
   Shortcut { sequence: "R"; enabled: !window.modalOpen; onActivated: board.resetCamera() }
   Shortcut { sequence: "Escape"; enabled: !window.modalOpen; onActivated: backend.cancelSelection() }
   Shortcut { sequences: ["Space","Return"]; enabled: !window.modalOpen; onActivated: board.keyboardSelect() }
