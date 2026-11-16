@@ -25,7 +25,7 @@ ApplicationWindow {
   property var setDescriptions: [qsTr("Across the stars"),qsTr("Wood, ivory & brass"),qsTr("A woodland tale"),qsTr("A little sweetness")]
   property var setColors: ["#d9ad69","#c99b6b","#93a775","#db9eb2"]
   property var difficultyNames: [qsTr("Casual"),qsTr("Thoughtful"),qsTr("Challenging")]
-  // Tab clears the header and sidebar away so only the board is left; it comes back with every launch.
+  // Tab clears the sidebar and every button away so only the board is left; it comes back with every launch.
   property bool chrome: true
   property bool modalOpen: newGameDialog.visible || settingsDialog.visible || helpDialog.visible || promotionDialog.visible || setMenu.visible
   function statusText() {
@@ -57,7 +57,7 @@ ApplicationWindow {
       verticalAlignment: Text.AlignVCenter
     }
   }
-  // Quiet toolbar buttons for the header: no outline, a soft fill on hover, and no Material insets so every one stands the same height.
+  // Quiet toolbar buttons for the sidebar: no outline, a soft fill on hover, and no Material insets so every one stands the same height.
   component HeaderButton: Button {
     id: header
     property bool lit: false
@@ -86,127 +86,6 @@ ApplicationWindow {
     ColumnLayout {
       anchors.fill: parent
       spacing: 0
-      Rectangle {
-        objectName: "header"
-        visible: window.chrome
-        Layout.fillWidth: true
-        Layout.preferredHeight: 70
-        color: theme.background
-        RowLayout {
-          anchors { fill: parent; leftMargin: 26; rightMargin: 24 }
-          spacing: 13
-          Text { text: "♔"; color: window.setColors[backend.pieceSet]; font.pixelSize: 32 }
-          Text { text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 29 }
-          Rectangle { Layout.leftMargin: 12; width: 1; height: 22; color: window.line }
-          Button {
-            id: setPicker
-            objectName: "setPicker"
-            Accessible.name: qsTr("Piece set")
-            Accessible.description: window.setNames[backend.pieceSet]
-            implicitHeight: 38
-            leftPadding: 10
-            rightPadding: 10
-            onClicked: setMenu.visible ? setMenu.close() : setMenu.open()
-            background: Rectangle {
-              radius: theme.radius
-              color: setMenu.visible ? Qt.alpha(theme.foreground,.07) : setPicker.hovered ? Qt.alpha(theme.foreground,.05) : "transparent"
-            }
-            contentItem: RowLayout {
-              spacing: 8
-              Text { text: window.setNames[backend.pieceSet]; color: setPicker.hovered || setMenu.visible ? theme.foreground : window.muted; font.pixelSize: 12 }
-              Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } } }
-            }
-            Popup {
-              id: setMenu
-              objectName: "setMenu"
-              y: setPicker.height + 6
-              x: setPicker.mirrored ? setPicker.width - width : 0
-              width: 268
-              padding: 6
-              focus: true
-              // Modal without the dim, so the press that dismisses the menu never lands on the board and moves a piece.
-              modal: true
-              dim: false
-              closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-              onOpened: { setList.currentIndex = backend.pieceSet; setList.forceActiveFocus() }
-              background: Rectangle { radius: theme.radius; color: theme.background; border.color: window.line }
-              contentItem: ListView {
-                id: setList
-                implicitHeight: contentHeight
-                interactive: false
-                spacing: 2
-                model: 4
-                keyNavigationEnabled: true
-                highlightFollowsCurrentItem: false
-                Keys.onReturnPressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                Keys.onEnterPressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                Keys.onSpacePressed: { backend.pieceSet = currentIndex; setMenu.close() }
-                delegate: ItemDelegate {
-                  id: setButton
-                  required property int index
-                  width: ListView.view.width
-                  height: 54
-                  objectName: "set-" + index
-                  Accessible.name: window.setNames[index]
-                  onClicked: { backend.pieceSet = index; setMenu.close() }
-                  background: Rectangle {
-                    radius: theme.radius
-                    color: backend.pieceSet === setButton.index ? Qt.alpha(window.setColors[setButton.index],.1) : setButton.hovered || setButton.ListView.isCurrentItem && setList.activeFocus ? Qt.alpha(theme.foreground,.05) : "transparent"
-                  }
-                  contentItem: RowLayout {
-                    spacing: 12
-                    Text { text: ["◎","♞","❧","♛"][setButton.index]; color: window.setColors[setButton.index]; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 28; Layout.leftMargin: 2 }
-                    ColumnLayout {
-                      Layout.fillWidth: true
-                      spacing: 3
-                      Text { text: window.setNames[setButton.index]; color: theme.foreground; font.pixelSize: 12; font.bold: true; Layout.fillWidth: true }
-                      Text { text: window.setDescriptions[setButton.index]; color: window.muted; font.pixelSize: 10; Layout.fillWidth: true }
-                    }
-                    Text { text: (setButton.index + 1).toLocaleString(Qt.locale(),'f',0); color: window.muted; font.pixelSize: 10; visible: backend.pieceSet !== setButton.index }
-                    Text { text: "✓"; color: window.setColors[setButton.index]; visible: backend.pieceSet === setButton.index; Layout.rightMargin: 4 }
-                  }
-                }
-              }
-            }
-          }
-          Item { Layout.fillWidth: true }
-          RowLayout {
-            spacing: 4
-            HeaderButton { objectName: "newGameButton"; text: qsTr("+  New game"); lit: true; tint: window.setColors[backend.pieceSet]; onClicked: newGameDialog.open() }
-            HeaderButton { text: qsTr("Settings"); onClicked: settingsDialog.open() }
-            HeaderButton {
-              id: sidebarButton
-              objectName: "sidebarButton"
-              implicitWidth: 34
-              Accessible.name: backend.sidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar")
-              ToolTip.visible: hovered
-              ToolTip.delay: 600
-              ToolTip.text: Accessible.name + "  ·  B"
-              onClicked: backend.sidebar = !backend.sidebar
-              // A small panel glyph whose side column fills in while the sidebar is showing.
-              contentItem: Item {
-                Rectangle {
-                  id: panelFrame
-                  anchors.centerIn: parent
-                  width: 16; height: 13; radius: 2
-                  color: "transparent"
-                  border.width: 1.5
-                  border.color: sidebarButton.hovered || backend.sidebar ? theme.foreground : Qt.alpha(theme.foreground,.72)
-                  Rectangle {
-                    anchors { top: parent.top; bottom: parent.bottom; right: parent.right; margins: 1.5 }
-                    width: 5
-                    color: panelFrame.border.color
-                    opacity: backend.sidebar ? 1 : 0
-                    Behavior on opacity { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } }
-                  }
-                }
-              }
-            }
-            HeaderButton { text: "?"; implicitWidth: 34; font.pixelSize: 14; Accessible.name: qsTr("Keyboard shortcuts"); onClicked: helpDialog.open() }
-          }
-        }
-      }
-      Rectangle { Layout.fillWidth: true; height: 1; color: window.line; visible: window.chrome }
       RowLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -222,6 +101,118 @@ ApplicationWindow {
           ColumnLayout {
             anchors { fill: parent; margins: 22 }
             spacing: 18
+            // Everything the game is run from lives in this one column: the name, the set, the match, and its buttons.
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 10
+              Text { text: "♔"; color: window.setColors[backend.pieceSet]; font.pixelSize: 26 }
+              Text { text: "Checkmate"; color: theme.foreground; font.family: "serif"; font.pixelSize: 24; Layout.fillWidth: true }
+              HeaderButton {
+                id: sidebarButton
+                objectName: "sidebarButton"
+                implicitWidth: 34
+                Accessible.name: backend.sidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar")
+                ToolTip.visible: hovered
+                ToolTip.delay: 600
+                ToolTip.text: Accessible.name + "  ·  B"
+                onClicked: backend.sidebar = !backend.sidebar
+                // A small panel glyph whose side column fills in while the sidebar is showing.
+                contentItem: Item {
+                  Rectangle {
+                    id: panelFrame
+                    anchors.centerIn: parent
+                    width: 16; height: 13; radius: 2
+                    color: "transparent"
+                    border.width: 1.5
+                    border.color: sidebarButton.hovered || backend.sidebar ? theme.foreground : Qt.alpha(theme.foreground,.72)
+                    Rectangle {
+                      anchors { top: parent.top; bottom: parent.bottom; right: parent.right; margins: 1.5 }
+                      width: 5
+                      color: panelFrame.border.color
+                      opacity: backend.sidebar ? 1 : 0
+                      Behavior on opacity { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } }
+                    }
+                  }
+                }
+              }
+              HeaderButton { text: "?"; implicitWidth: 34; font.pixelSize: 14; Accessible.name: qsTr("Keyboard shortcuts"); onClicked: helpDialog.open() }
+            }
+            Button {
+              id: setPicker
+              objectName: "setPicker"
+              Accessible.name: qsTr("Piece set")
+              Accessible.description: window.setNames[backend.pieceSet]
+              Layout.fillWidth: true
+              implicitHeight: 40
+              topInset: 0; bottomInset: 0
+              leftPadding: 12
+              rightPadding: 12
+              onClicked: setMenu.visible ? setMenu.close() : setMenu.open()
+              background: Rectangle {
+                radius: theme.radius
+                color: setMenu.visible ? Qt.alpha(theme.foreground,.07) : setPicker.hovered ? Qt.alpha(theme.foreground,.05) : "transparent"
+                border.color: window.line
+              }
+              contentItem: RowLayout {
+                spacing: 8
+                Text { text: ["◎","♞","❧","♛"][backend.pieceSet]; color: window.setColors[backend.pieceSet]; font.pixelSize: 17; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 20 }
+                Text { text: window.setNames[backend.pieceSet]; color: theme.foreground; font.pixelSize: 13; Layout.fillWidth: true; elide: Text.ElideRight }
+                Text { text: "▾"; color: window.muted; font.pixelSize: 11; rotation: setMenu.visible ? 180 : 0; Behavior on rotation { enabled: !backend.reducedMotion; NumberAnimation { duration: 140 } } }
+              }
+              Popup {
+                id: setMenu
+                objectName: "setMenu"
+                y: setPicker.height + 6
+                x: 0
+                width: setPicker.width
+                padding: 6
+                focus: true
+                // Modal without the dim, so the press that dismisses the menu never lands on the board and moves a piece.
+                modal: true
+                dim: false
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                onOpened: { setList.currentIndex = backend.pieceSet; setList.forceActiveFocus() }
+                background: Rectangle { radius: theme.radius; color: theme.background; border.color: window.line }
+                contentItem: ListView {
+                  id: setList
+                  implicitHeight: contentHeight
+                  interactive: false
+                  spacing: 2
+                  model: 4
+                  keyNavigationEnabled: true
+                  highlightFollowsCurrentItem: false
+                  Keys.onReturnPressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                  Keys.onEnterPressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                  Keys.onSpacePressed: { backend.pieceSet = currentIndex; setMenu.close() }
+                  delegate: ItemDelegate {
+                    id: setButton
+                    required property int index
+                    width: ListView.view.width
+                    height: 54
+                    objectName: "set-" + index
+                    Accessible.name: window.setNames[index]
+                    onClicked: { backend.pieceSet = index; setMenu.close() }
+                    background: Rectangle {
+                      radius: theme.radius
+                      color: backend.pieceSet === setButton.index ? Qt.alpha(window.setColors[setButton.index],.1) : setButton.hovered || setButton.ListView.isCurrentItem && setList.activeFocus ? Qt.alpha(theme.foreground,.05) : "transparent"
+                    }
+                    contentItem: RowLayout {
+                      spacing: 12
+                      Text { text: ["◎","♞","❧","♛"][setButton.index]; color: window.setColors[setButton.index]; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; Layout.preferredWidth: 28; Layout.leftMargin: 2 }
+                      ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        Text { text: window.setNames[setButton.index]; color: theme.foreground; font.pixelSize: 12; font.bold: true; Layout.fillWidth: true }
+                        Text { text: window.setDescriptions[setButton.index]; color: window.muted; font.pixelSize: 10; Layout.fillWidth: true }
+                      }
+                      Text { text: (setButton.index + 1).toLocaleString(Qt.locale(),'f',0); color: window.muted; font.pixelSize: 10; visible: backend.pieceSet !== setButton.index }
+                      Text { text: "✓"; color: window.setColors[setButton.index]; visible: backend.pieceSet === setButton.index; Layout.rightMargin: 4 }
+                    }
+                  }
+                }
+              }
+            }
+            Rectangle { Layout.fillWidth: true; height: 1; color: window.line }
             RowLayout {
               Layout.fillWidth: true
               Text { text: backend.computer ? qsTr("VS COMPUTER") : qsTr("TWO PLAYERS"); font.pixelSize: 10; font.letterSpacing: Qt.application.layoutDirection === Qt.RightToLeft ? 0 : 2; color: window.muted; Layout.fillWidth: true }
@@ -279,8 +270,40 @@ ApplicationWindow {
               Text { anchors { top: parent.top; left: parent.left } visible: history.count === 0; text: qsTr("Every great game starts\nwith a single move."); color: window.muted; font.pixelSize: 12; lineHeight: 1.6 }
             }
             FlatButton { objectName: "undoButton"; text: qsTr("↶  Undo move"); Layout.fillWidth: true; enabled: backend.canUndo; onClicked: backend.undo() }
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 8
+              HeaderButton { objectName: "newGameButton"; text: qsTr("+  New game"); lit: true; tint: window.setColors[backend.pieceSet]; Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 38; onClicked: newGameDialog.open() }
+              HeaderButton { objectName: "settingsButton"; text: qsTr("Settings"); Layout.fillWidth: true; Layout.preferredWidth: 1; implicitHeight: 38; onClicked: settingsDialog.open() }
+            }
             Text { text: backend.saveHealthy ? qsTr("Saved automatically · No time limit") : qsTr("Game is not being saved"); font.pixelSize: 10; color: window.muted; Layout.alignment: Qt.AlignHCenter }
           }
+        }
+      }
+    }
+    HeaderButton {
+      id: showSidebar
+      objectName: "showSidebar"
+      visible: !backend.sidebar && window.chrome
+      anchors { top: parent.top; right: parent.right; margins: 14 }
+      implicitWidth: 34
+      Accessible.name: qsTr("Show sidebar")
+      ToolTip.visible: hovered
+      ToolTip.delay: 600
+      ToolTip.text: Accessible.name + "  ·  B"
+      onClicked: backend.sidebar = true
+      background: Rectangle {
+        radius: theme.radius
+        color: showSidebar.hovered ? Qt.alpha(theme.background,.9) : Qt.alpha(theme.background,.6)
+        border.color: window.line
+      }
+      contentItem: Item {
+        Rectangle {
+          anchors.centerIn: parent
+          width: 16; height: 13; radius: 2
+          color: "transparent"
+          border.width: 1.5
+          border.color: theme.foreground
         }
       }
     }
