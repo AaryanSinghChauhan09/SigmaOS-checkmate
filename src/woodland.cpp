@@ -600,32 +600,30 @@ Carving sculpture(int kind) {
 
 const Woodland::Figure &Woodland::figure(int kind,int tone) {
   static std::map<int,Figure> figures;
-  static std::map<int,Carving> carvings;
   kind=std::clamp(kind,1,6);
-  const int key=kind*2+(tone ? 1 : 0);
-  const auto found=figures.find(key);
-  if(found!=figures.end()) return found->second;
-  // The first figure asked for has all six carved, each on a thread of its own: a set is never wanted one figure at a time.
-  if(carvings.empty()) {
+  // The first figure asked for has all six carved, each on a thread of its own, and painted for both sides: a set is
+  // never wanted one figure at a time. The carvings are let go once the figures painted from them are made.
+  if(figures.empty()) {
     Carving carved[6];
     std::vector<std::thread> carvers;
     for(int each=0;each<6;++each) carvers.emplace_back([&carved,each] { carved[each]=sculpture(each+1); });
     for(auto &carver:carvers) carver.join();
-    for(int each=0;each<6;++each) carvings.emplace(each+1,std::move(carved[each]));
+    for(int each=0;each<6;++each) for(int side=0;side<2;++side) {
+      const Carving &carving=carved[each];
+      Figure figure;
+      figure.indices=carving.indices;
+      figure.vertices.reserve(carving.points.size());
+      for(size_t i=0;i<carving.points.size();++i) {
+        const P p=carving.points[i], n=carving.normals[i], c=side ? carving.dark[i] : carving.light[i];
+        SculptVertex vertex;
+        vertex.position=QVector3D(p.x,p.y,p.z);
+        vertex.normal=QVector3D(n.x,n.y,n.z);
+        vertex.uv=QVector2D(std::atan2(p.z,p.x)/(2*pi)+.5f,p.y);
+        vertex.color=QVector4D(saturate(c.x),saturate(c.y),saturate(c.z),1);
+        figure.vertices.push_back(vertex);
+      }
+      figures.emplace((each+1)*2+side,std::move(figure));
+    }
   }
-  auto carving=carvings.find(kind);
-  const Carving &carved=carving->second;
-  Figure figure;
-  figure.indices=carved.indices;
-  figure.vertices.reserve(carved.points.size());
-  for(size_t i=0;i<carved.points.size();++i) {
-    const P p=carved.points[i], n=carved.normals[i], c=tone ? carved.dark[i] : carved.light[i];
-    SculptVertex vertex;
-    vertex.position=QVector3D(p.x,p.y,p.z);
-    vertex.normal=QVector3D(n.x,n.y,n.z);
-    vertex.uv=QVector2D(std::atan2(p.z,p.x)/(2*pi)+.5f,p.y);
-    vertex.color=QVector4D(saturate(c.x),saturate(c.y),saturate(c.z),1);
-    figure.vertices.push_back(vertex);
-  }
-  return figures.emplace(key,std::move(figure)).first->second;
+  return figures.at(kind*2+(tone ? 1 : 0));
 }

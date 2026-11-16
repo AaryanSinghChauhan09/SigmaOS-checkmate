@@ -1,4 +1,5 @@
 #pragma once
+#include <QHash>
 #include <QQuick3DGeometry>
 
 class SculptGeometry : public QQuick3DGeometry {
@@ -18,6 +19,8 @@ public:
   void setDesign(int value);
   void setPart(int value);
   void setTone(int value);
+  // All four at once, built once.
+  void shape(int design,int kind,int part,int tone);
   // A geometry declared in QML is built once, when all four of its properties are in.
   void classBegin() override { m_declared = true; }
   void componentComplete() override;
@@ -27,4 +30,14 @@ private:
   void rebuild();
   int m_kind = 1, m_design = 0, m_part = 0, m_tone = 0;
   bool m_declared = false, m_built = false;
+};
+
+// Hands out one geometry per figure, so sixteen pawns share a single mesh on the GPU instead of uploading sixteen.
+class Sculptures : public QObject {
+  Q_OBJECT
+public:
+  using QObject::QObject;
+  Q_INVOKABLE QQuick3DGeometry *geometry(int design,int kind,int part,int tone);
+private:
+  QHash<int,SculptGeometry *> m_made;
 };

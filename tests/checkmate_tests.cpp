@@ -375,6 +375,47 @@ private slots:
         QCOMPARE(next.fullmove,std::numeric_limits<int>::max());
     }
 
+    void fenDescribesAPositionThatCouldArise() {
+        // The side that just moved cannot be in check, and nothing follows the sixth field.
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1"));
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1 extra"));
+        QVERIFY(Chess::Position::fromFen("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1").check(false));
+        // A right to castle needs its king and rook at home.
+        QCOMPARE(Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1").castle,0);
+        QCOMPARE(Chess::Position::fromFen("r3k3/8/8/8/8/8/8/4K2R w KQkq - 0 1").castle,1|8);
+        QCOMPARE(Chess::Position::fromFen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1").fen(),std::string("4k3/8/8/8/8/8/8/4K3 w - - 0 1"));
+        // An en passant square is empty, with the pawn that passed it standing just beyond.
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/3b4/3pP3/8/8/8/4K3 w - d6 0 1"));
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument,Chess::Position::fromFen("4k3/8/8/4P3/8/8/8/4K3 w - d6 0 1"));
+        const auto passing=Chess::Position::fromFen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+        QCOMPARE(passing.after({36,43}).board[35].kind,int(Chess::Empty));
+    }
+
+    void theComputerKnowsHowAGameEnds() {
+        const auto never=std::make_shared<std::atomic_bool>(false);
+        // A mate on the last move the fifty-move rule allows is still a mate.
+        const auto lastChance=Chess::Position::fromFen("7k/8/5KQ1/8/8/8/8/8 w - - 99 1");
+        for (int level : {1,2}) {
+            const auto next=lastChance.after(Chess::bestMove(lastChance,level,never));
+            QVERIFY(next.check(false) && next.legal().empty());
+        }
+        // Taking the rook with the queen is stalemate, and a won game thrown away.
+        const auto trap=Chess::Position::fromFen("7k/Q4r2/6K1/8/8/8/8/8 w - - 0 1");
+        QVERIFY(trap.after({48,53}).legal().empty() && !trap.after({48,53}).check(false));
+        for (int level : {0,1,2}) for (int again=0;again<5;++again) {
+            const auto next=trap.after(Chess::bestMove(trap,level,never));
+            QVERIFY(next.check(false) || !next.legal().empty());
+        }
+        // Losing, with a third repetition one step away, every level takes the draw.
+        std::vector<Chess::Position> history{Chess::Position::fromFen("7k/8/5K2/8/8/8/8/1Q6 w - - 0 1")};
+        for (const auto &move : std::vector<Chess::Move>{{1,9},{63,62},{9,1},{62,63},{1,9},{63,62},{9,1}}) history.push_back(history.back().after(move));
+        for (int level : {0,1,2}) {
+            const auto reply=Chess::bestMove(history.back(),level,never,history);
+            QCOMPARE(reply,(Chess::Move{62,63}));
+            QCOMPARE(history.back().after(reply).key(),history.front().key());
+        }
+    }
+
     void specialMoveTrees() {
         const auto castle = Chess::Position::fromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
         QCOMPARE(Chess::perft(castle,1), uint64_t(48));
@@ -394,11 +435,14 @@ private slots:
         QVERIFY(game.move(14,30));
         QVERIFY(game.move(59,31));
         QCOMPARE(game.outcome(),QString("black-wins"));
+        // The ring under a king in check knows where that king stands.
+        QCOMPARE(game.checkSquare(),4);
         QCOMPARE(game.moves().last(),QString("Qh4#"));
         QVERIFY(!game.move(12,20));
         game.undo();
         QVERIFY(!game.finished());
         QCOMPARE(game.moves().size(),3);
+        QCOMPARE(game.checkSquare(),-1);
     }
 
     void enPassantAndCastling() {
@@ -472,7 +516,13 @@ private slots:
         Backend other(path);
         QVERIFY(!other.ownsSave());
         QVERIFY(!other.error().isEmpty());
+        QVERIFY(other.move(12,28));
         other.newGame(false,1); other.setPieceSet(3);
+        // It may start afresh, unsaved, and goes on saying why.
+        QVERIFY(other.moves().isEmpty());
+        QVERIFY(!other.error().isEmpty());
+        QVERIFY(!other.saveHealthy());
+        QVERIFY(other.saveContended());
         QVERIFY(original.open(QIODevice::ReadOnly));
         QCOMPARE(original.readAll(),bytes);
     }
@@ -555,6 +605,31 @@ private slots:
         QVERIFY(server.hasPendingConnections());
     }
 
+    void aSaveOutOfReachStillOpensAWindow() {
+        // Another process holds the save and never answers the socket. The launch waits its two seconds for one
+        // that is still starting, then opens a window that says the game is not being saved, rather than giving up unseen.
+        QTemporaryDir dir;
+        Backend owner(dir.filePath("checkmate/game.json"));
+        owner.newGame(false,0);
+        QProcessEnvironment environment=QProcessEnvironment::systemEnvironment();
+        environment.insert("XDG_DATA_HOME",dir.path());
+        environment.insert("XDG_RUNTIME_DIR",dir.path());
+        QProcess second;
+        second.setProcessEnvironment(environment);
+        second.start(QCoreApplication::applicationDirPath()+"/checkmate",{"open"});
+        QVERIFY(second.waitForStarted());
+        // Listening on the socket is the last thing done before the window is loaded.
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(dir.filePath("checkmate.sock")),15000);
+        const bool stillOpen=second.state()==QProcess::Running;
+        // What it says arrives in its own time, so it is gathered until the reason has come through.
+        QByteArray said;
+        QTRY_VERIFY_WITH_TIMEOUT((said+=second.readAllStandardError()).contains("owns this saved game") || second.state()!=QProcess::Running,5000);
+        second.kill();
+        QVERIFY(second.waitForFinished());
+        QVERIFY(stillOpen);
+        QVERIFY2(said.contains("owns this saved game"),said.constData());
+    }
+
     void headlessCommandsReadSavedGames() {
         QTemporaryDir dir;
         Backend game(dir.filePath("checkmate/game.json"));
@@ -601,6 +676,20 @@ private slots:
         auto next = p.after(move);
         QVERIFY(next.check(false));
         QVERIFY(next.legal().empty());
+    }
+
+    void everyPieceOfAKindWearsOneGeometry() {
+        Sculptures sculptures;
+        auto *pawn=sculptures.geometry(0,1,0,0);
+        QVERIFY(pawn);
+        QVERIFY(!pawn->vertexData().isEmpty());
+        // Asked for again, it is the same object, so the GPU holds one mesh however many pieces wear it.
+        QCOMPARE(sculptures.geometry(0,1,0,0),pawn);
+        // Only Moss & Myth paints its two sides differently.
+        QCOMPARE(sculptures.geometry(0,1,0,1),pawn);
+        QVERIFY(sculptures.geometry(2,1,0,1)!=sculptures.geometry(2,1,0,0));
+        QVERIFY(sculptures.geometry(0,2,0,0)!=pawn);
+        QVERIFY(sculptures.geometry(1,1,0,0)!=pawn);
     }
 
     void sculptedSurfacesFaceTheirNormals() {
@@ -786,6 +875,8 @@ private slots:
         Backend backend(":memory:");
         backend.newGame(false,0);
         backend.setReducedMotion(true);
+        // Declared before the engine, so it is still there while the scene that borrows from it is torn down.
+        Sculptures sculptures;
         QQmlApplicationEngine engine;
         QStringList warnings;
         connect(&engine,&QQmlEngine::warnings,this,[&](const QList<QQmlError> &errors) {
@@ -794,6 +885,7 @@ private slots:
         engine.rootContext()->setContextProperty("translator",&translator);
         engine.rootContext()->setContextProperty("theme",&theme);
         engine.rootContext()->setContextProperty("backend",&backend);
+        engine.rootContext()->setContextProperty("sculptures",&sculptures);
         engine.load(QUrl("qrc:/Main.qml"));
         QVERIFY2(!engine.rootObjects().isEmpty(),qPrintable(warnings.join('\n')));
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
@@ -1117,6 +1209,10 @@ private slots:
             QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,point.toPoint());
             QTRY_VERIFY(!backend.promotionPending());
             QCOMPARE(backend.position().board[56].kind,promotion);
+            // The figure on the board becomes what the pawn was promoted to.
+            auto *promoted=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[56].id));
+            QVERIFY(promoted);
+            QTRY_COMPARE(promoted->property("shownKind").toInt(),promotion);
             QTRY_VERIFY(!promotionDialog->property("visible").toBool());
         }
         QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));

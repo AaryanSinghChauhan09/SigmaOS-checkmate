@@ -38,7 +38,7 @@ int runCli(int argc, char **argv) {
   if (file.size()>2*1024*1024) return fail("Saved game is too large.");
   QJsonParseError error;
   const auto data=QJsonDocument::fromJson(file.readAll(),&error).object();
-  if (error.error!=QJsonParseError::NoError || data["version"].toInt()!=1 || !data["moves"].isArray() || data["moves"].toArray().size()>5000) return fail("Invalid saved game.");
+  if (error.error!=QJsonParseError::NoError || data["version"].toInt()!=1 || !data["moves"].isArray() || data["moves"].toArray().size()>20000) return fail("Invalid saved game.");
   Backend game(":memory:"); game.newGame(false,0);
   for (auto value : data["moves"].toArray()) {
     const auto move=value.toArray();

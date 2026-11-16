@@ -53,5 +53,6 @@
   "Moves": "النقلات",
   "Undo": "تراجع",
   "New game": "لعبة جديدة",
-  "Two players": "لاعبان"
+  "Two players": "لاعبان",
+  "Opening Checkmate again will open another window: %1": "فتح Checkmate مرة أخرى سيفتح نافذة أخرى: %1"
 }

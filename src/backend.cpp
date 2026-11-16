@@ -22,6 +22,8 @@ QString adjudicate(const Chess::Position &p, const std::vector<Chess::Move> &leg
 }
 
 Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_savePath(savePath) {
+  m_reply.setSingleShot(true);
+  connect(&m_reply,&QTimer::timeout,this,&Backend::scheduleComputer);
   if (m_savePath.isEmpty()) m_savePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/game.json";
   m_repetitions[position().key()] = 1;
   if (m_savePath != ":memory:") {
@@ -38,6 +40,11 @@ Backend::Backend(const QString &savePath, QObject *parent) : QObject(parent), m_
   QTimer::singleShot(0, this, &Backend::scheduleComputer);
 }
 Backend::~Backend() { cancelComputer(); }
+int Backend::checkSquare() const {
+  if (!checked()) return -1;
+  for (int s = 0; s < 64; ++s) if (position().board[s].kind == Chess::King && position().board[s].white == position().white) return s;
+  return -1;
+}
 QVariantList Backend::targets() const {
   QVariantList result;
   for (auto move : m_legal) if (move.from == m_selected && !result.contains(move.to)) result.append(move.to);
@@ -91,10 +98,11 @@ void Backend::apply(Chess::Move move) {
   refresh();
   emit moved(piece.id,piece.kind == Chess::Knight,capture);
   save();
-  QTimer::singleShot(m_reducedMotion ? 0 : 420,this,&Backend::scheduleComputer);
+  m_reply.start(m_reducedMotion ? 0 : 420);
 }
 void Backend::cancelComputer() {
   ++m_generation;
+  m_reply.stop();
   if (m_cancel) m_cancel->store(true);
   m_thinking = false;
 }
@@ -105,8 +113,9 @@ void Backend::scheduleComputer() {
   const auto generation = m_generation;
   const auto p = position();
   const int difficulty = m_difficulty;
-  std::vector<std::string> history;
-  for (const auto &past : m_positions) history.push_back(past.key());
+  // Only what came after the last capture or pawn move can be repeated.
+  const size_t reversible = std::min(m_positions.size(),size_t(p.halfmove) + 1);
+  const std::vector<Chess::Position> history(m_positions.end() - reversible,m_positions.end());
   auto watcher = new QFutureWatcher<Chess::Move>(this);
   connect(watcher,&QFutureWatcher<Chess::Move>::finished,this,[this,watcher,generation,cancel] {
     auto result = watcher->result();
@@ -121,8 +130,8 @@ void Backend::scheduleComputer() {
 }
 void Backend::newGame(bool computer, int difficulty, bool humanWhite) {
   cancelComputer();
-  if (!ownsSave()) return;
-  m_saveBlocked = false; m_error.clear();
+  // A window that does not own the save may still start afresh; its game is simply not kept, as its footer says.
+  if (ownsSave()) { m_saveBlocked = false; m_error.clear(); }
   m_computer = computer; m_difficulty = std::clamp(difficulty,0,2); m_humanWhite = humanWhite;
   m_positions = {Chess::Position::initial()}; m_moves.clear(); m_notation.clear(); m_pending = {}; m_selected = -1;
   m_repetitions.clear(); m_repetitions[position().key()] = 1;
@@ -139,6 +148,11 @@ void Backend::undo() {
   refresh(); save(); scheduleComputer();
 }
 void Backend::dismissError() { m_error.clear(); emit changed(); }
+void Backend::reportSocket(const QString &reason) {
+  // A save problem is the more pressing thing to read, so it is not replaced.
+  if (m_error.isEmpty()) m_error = tr("Opening Checkmate again will open another window: %1").arg(reason);
+  emit changed();
+}
 void Backend::setPieceSet(int value) {
   if (value < 0 || value > 3 || value == m_pieceSet) return;
   m_pieceSet = value; emit preferencesChanged(); save();
@@ -184,7 +198,7 @@ void Backend::restore() {
     m_repetitions.clear(); m_repetitions[position().key()] = 1;
     m_error = tr("The saved game is damaged. Start a new game to replace it.");
   };
-  if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 5000) { invalid(); return; }
+  if (error.error != QJsonParseError::NoError || data["version"].toInt() != 1 || !data["moves"].isArray() || data["moves"].toArray().size() > 20000) { invalid(); return; }
   for (auto value : data["moves"].toArray()) {
     auto entry = value.toArray();
     if (entry.size() != 3) { invalid(); return; }

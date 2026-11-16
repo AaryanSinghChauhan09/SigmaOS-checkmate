@@ -1,4 +1,4 @@
-// checkmate — one line on what it does.
+// checkmate — 3D chess for one or two players.
 
 #include <QGuiApplication>
 #include <QIcon>
@@ -43,6 +43,12 @@ int main(int argc, char *argv[]) {
     app.setDesktopFileName("checkmate");
     app.setWindowIcon(QIcon::fromTheme("checkmate", QIcon(":/checkmate.svg")));
 
+    // A second launch only brings the first forward, so that is settled before anything else is set up.
+    const QString socketName = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + "/checkmate.sock";
+    QLocalSocket existing;
+    existing.connectToServer(socketName);
+    if (existing.waitForConnected(100)) return 0;
+
     QQuickStyle::setStyle("Material");
 
     // Installed before anything is translated, and every qsTr() binding is
@@ -51,33 +57,35 @@ int main(int argc, char *argv[]) {
     app.installTranslator(&translator);
 
     Theme theme;
-    const QString socketName = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + "/checkmate.sock";
-    QLocalSocket existing;
-    existing.connectToServer(socketName);
-    if (existing.waitForConnected(100)) return 0;
-
     Backend backend;
     if (!backend.ownsSave()) {
+      // Another window may hold the save and be a moment from listening; give it that moment. A folder that
+      // cannot be written has nobody to wait for.
       QElapsedTimer startup;
       startup.start();
-      while (startup.elapsed() < 2000) {
+      while (backend.saveContended() && startup.elapsed() < 2000) {
         existing.abort(); existing.connectToServer(socketName);
         if (existing.waitForConnected(100)) return 0;
         QThread::msleep(50);
       }
+      // Nobody answered, so the save is simply out of reach. The window opens and says so, rather than a
+      // launcher click that does nothing.
       std::cerr << backend.error().toStdString() << "\n";
-      return 1;
     }
     QLocalServer server;
     server.setSocketOptions(QLocalServer::UserAccessOption);
     QLocalServer::removeServer(socketName);
-    if (!server.listen(socketName)) { std::cerr << server.errorString().toStdString() << "\n"; return 1; }
+    // Without the socket a second launch opens a window of its own, which the save lock keeps from writing.
+    if (!server.listen(socketName)) { std::cerr << server.errorString().toStdString() << "\n"; backend.reportSocket(server.errorString()); }
 
+    // Declared before the engine, so it is still there while the scene that borrows from it is torn down.
+    Sculptures sculptures;
     QQmlApplicationEngine engine;
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
     engine.rootContext()->setContextProperty("translator", &translator);
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
+    engine.rootContext()->setContextProperty("sculptures", &sculptures);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

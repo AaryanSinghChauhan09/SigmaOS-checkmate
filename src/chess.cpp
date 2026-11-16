@@ -5,6 +5,7 @@
 #include <cmath>
 #include <sstream>
 #include <limits>
+#include <random>
 #include <stdexcept>
 
 namespace Chess {
@@ -24,6 +25,8 @@ Position Position::fromFen(const std::string &fen) {
   std::istringstream input(fen);
   std::string rows, turn, rights, enPassant;
   if (!(input >> rows >> turn >> rights >> enPassant >> p.halfmove >> p.fullmove)) throw std::invalid_argument("Invalid FEN");
+  std::string extra;
+  if (input >> extra) throw std::invalid_argument("Invalid FEN");
   int rank = 7, file = 0, id = 0;
   for (char c : rows) {
     if (c == '/') { if (file != 8 || rank == 0) throw std::invalid_argument("Invalid FEN board"); --rank; file = 0; }
@@ -47,6 +50,11 @@ Position Position::fromFen(const std::string &fen) {
   }
   p.ep = enPassant == "-" ? -1 : square(enPassant);
   if (enPassant != "-" && (p.ep < 0 || p.ep / 8 != (p.white ? 5 : 2))) throw std::invalid_argument("Invalid en passant square");
+  if (p.ep >= 0) {
+    // The square is the one a pawn has just passed over: empty, with that pawn standing beyond it.
+    const auto passed = p.board[p.ep + (p.white ? -8 : 8)];
+    if (p.board[p.ep].kind || passed.kind != Pawn || passed.white == p.white) throw std::invalid_argument("Invalid en passant square");
+  }
   for (bool side : {false, true}) {
     int kings = 0;
     for (int s = 0; s < 64; ++s) {
@@ -56,6 +64,14 @@ Position Position::fromFen(const std::string &fen) {
     }
     if (kings != 1) throw std::invalid_argument("Position needs two kings");
   }
+  // A right to castle is only kept where the king and that rook still stand at home.
+  auto home = [&](int square, int kind, bool white) { return p.board[square].kind == kind && p.board[square].white == white; };
+  if (!home(4,King,true) || !home(7,Rook,true)) p.castle &= ~1;
+  if (!home(4,King,true) || !home(0,Rook,true)) p.castle &= ~2;
+  if (!home(60,King,false) || !home(63,Rook,false)) p.castle &= ~4;
+  if (!home(60,King,false) || !home(56,Rook,false)) p.castle &= ~8;
+  // Whoever just moved cannot have left their own king in check.
+  if (p.check(!p.white)) throw std::invalid_argument("The side that just moved is in check");
   return p;
 }
 std::string Position::fen() const {
@@ -141,7 +157,7 @@ Position Position::after(Move move) const {
   const bool capture = board[move.to].kind || (piece.kind == Pawn && move.to == ep);
   next.board[move.to] = piece;
   next.board[move.from] = {};
-  if (piece.kind == Pawn && move.to == ep && move.from % 8 != move.to % 8) next.board[move.to + (piece.white ? -8 : 8)] = {};
+  if (piece.kind == Pawn && move.to == ep && !board[move.to].kind && move.from % 8 != move.to % 8) next.board[move.to + (piece.white ? -8 : 8)] = {};
   if (piece.kind == King && std::abs(move.to - move.from) == 2) {
     const int from = move.to > move.from ? move.from + 3 : move.from - 4;
     const int to = move.to > move.from ? move.from + 1 : move.from - 1;
@@ -157,8 +173,8 @@ Position Position::after(Move move) const {
   next.white = !white;
   return next;
 }
-std::vector<Move> Position::legal() const {
-  std::vector<Move> candidates, result;
+std::vector<Move> Position::candidates() const {
+  std::vector<Move> candidates;
   auto add = [&](int from, int to) {
     if (board[to].kind == King) return;
     if (board[from].kind == Pawn && (to / 8 == 0 || to / 8 == 7))
@@ -210,8 +226,16 @@ std::vector<Move> Position::legal() const {
       }
     }
   }
-  for (auto move : candidates) if (!after(move).check(white)) result.push_back(move);
+  return candidates;
+}
+std::vector<Move> Position::legal() const {
+  std::vector<Move> result;
+  for (auto move : candidates()) if (!after(move).check(white)) result.push_back(move);
   return result;
+}
+bool Position::anyLegal() const {
+  for (auto move : candidates()) if (!after(move).check(white)) return true;
+  return false;
 }
 std::string Position::san(Move move) const {
   auto piece = board[move.from];
@@ -246,13 +270,32 @@ uint64_t perft(const Position &p, int depth) {
   return nodes;
 }
 namespace {
+// The middle of the board is 0 and a corner 6.
+int fromCentre(int s) { return std::abs(2 * (s % 8) - 7) / 2 + std::abs(2 * (s / 8) - 7) / 2; }
 struct Search {
   std::shared_ptr<std::atomic_bool> cancel;
   std::chrono::steady_clock::time_point deadline;
-  std::vector<std::string> path;
+  // The positions behind this one since the last capture or pawn move, as far as the game and the search have come.
+  std::vector<uint64_t> path;
   bool stopped = false;
+  // What makes two positions the same for repetition: the pieces, the side to move, the castling rights, and an
+  // en passant square only where a pawn stands ready to use it. The game itself asks whether that capture is legal;
+  // the search settles for possible, which costs nothing to tell.
+  static uint64_t hash(const Position &p) {
+    uint64_t h = 1469598103934665603ull;
+    auto mix = [&](uint64_t value) { h = (h ^ value) * 1099511628211ull; };
+    for (int s = 0; s < 64; ++s) mix(p.board[s].kind ? p.board[s].kind * 2 + p.board[s].white : 0);
+    mix(p.white); mix(p.castle);
+    int ep = -1;
+    if (p.ep >= 0) for (int dx : {-1,1}) {
+      const int x = p.ep % 8 + dx, y = p.ep / 8 + (p.white ? -1 : 1);
+      if (inside(x,y) && p.board[y * 8 + x].kind == Pawn && p.board[y * 8 + x].white == p.white) ep = p.ep;
+    }
+    mix(uint64_t(ep + 1));
+    return h;
+  }
   int evaluate(const Position &p) {
-    int score = 0;
+    int score = 0, material[2] = {0,0}, pawns[2] = {0,0}, king[2] = {0,0};
     for (int s = 0; s < 64; ++s) {
       auto piece = p.board[s];
       if (!piece.kind) continue;
@@ -261,21 +304,56 @@ struct Search {
       int bonus = piece.kind == Pawn ? rank * 7 + center * 2 : piece.kind == Knight || piece.kind == Bishop ? center * 10 : 0;
       if (piece.kind == King && rank < 2 && (s % 8 == 6 || s % 8 == 2)) bonus += 25;
       score += (piece.white ? 1 : -1) * (values[piece.kind] + bonus);
+      material[piece.white] += values[piece.kind];
+      pawns[piece.white] += piece.kind == Pawn;
+      if (piece.kind == King) king[piece.white] = s;
+    }
+    // Material alone never mates a king that is free to roam. Once one side is down to a lone king, or a king and
+    // a minor against far more, the other is paid for driving it to the edge and bringing its own king up.
+    for (bool winner : {false,true}) {
+      const bool loser = !winner;
+      if (pawns[loser] || material[loser] > values[Bishop] || material[winner] - material[loser] < values[Rook] - 100) continue;
+      const int apart = std::abs(king[winner] % 8 - king[loser] % 8) + std::abs(king[winner] / 8 - king[loser] / 8);
+      // Squares the lone king could still step to: the fewer, the nearer the mate.
+      int room = 0;
+      for (int dx = -1; dx <= 1; ++dx) for (int dy = -1; dy <= 1; ++dy) {
+        const int x = king[loser] % 8 + dx, y = king[loser] / 8 + dy;
+        if ((!dx && !dy) || !inside(x,y)) continue;
+        const auto there = p.board[y * 8 + x];
+        room += !(there.kind && there.white == loser) && !p.attacked(y * 8 + x,winner);
+      }
+      score += (winner ? 1 : -1) * (14 * fromCentre(king[loser]) + 6 * (14 - apart) + 10 * (8 - room));
     }
     return p.white ? score : -score;
   }
+  // `depth` counts down to the horizon at 0 and on below it, where only captures and promotions are followed
+  // until the position is quiet. That tail is as long at every level, so a deeper search never sees less of an exchange.
   int run(const Position &p, int depth, int alpha, int beta, int ply) {
     if (cancel->load() || std::chrono::steady_clock::now() >= deadline) { stopped = true; return 0; }
-    auto moves = p.legal();
-    if (moves.empty()) return p.check(p.white) ? -100000 + ply : 0;
-    const auto key = p.key();
-    if (p.halfmove >= 100 || p.insufficient() || std::count(path.begin(),path.end(),key) >= 2) return 0;
-    if (depth <= 0 && ply >= 8) return evaluate(p);
-    const bool check = p.check(p.white);
-    if (depth <= 0 && !check) {
+    const bool check = p.check(p.white), tail = depth <= 0 && !check;
+    // How the game ends comes first, in the order the rules give it: a mate or a stalemate stands whatever the
+    // move counter says, and however deep or quiet the node is.
+    std::vector<Move> moves;
+    if (!tail) {
+      moves = p.legal();
+      if (moves.empty()) return check ? -100000 + ply : 0;
+    } else if (!p.anyLegal()) return 0;
+    if (p.halfmove >= 100 || p.insufficient()) return 0;
+    // A third occurrence is a draw wherever it is met. Nothing repeats before four quiet plies have passed.
+    const uint64_t key = hash(p);
+    if (p.halfmove >= 4) {
+      int seen = 0;
+      const size_t back = std::min(path.size(),size_t(p.halfmove));
+      for (size_t i = path.size() - back; i < path.size(); ++i) seen += path[i] == key;
+      if (seen >= 2) return 0;
+    }
+    if (depth <= -8) return evaluate(p);
+    if (tail) {
+      // Standing pat comes before the captures are listed: most of these nodes end here.
       int stand = evaluate(p);
       if (stand >= beta) return beta;
       alpha = std::max(alpha, stand);
+      moves = p.legal();
       moves.erase(std::remove_if(moves.begin(),moves.end(),[&](Move m) {
         return !p.board[m.to].kind && !m.promotion && !(p.board[m.from].kind == Pawn && m.to == p.ep);
       }),moves.end());
@@ -288,7 +366,7 @@ struct Search {
     for (auto move : moves) {
       int score = -run(p.after(move),depth - 1,-beta,-alpha,ply + 1);
       if (stopped) break;
-      if (score >= beta) { path.pop_back(); return beta; }
+      if (score >= beta) { alpha = beta; break; }
       alpha = std::max(alpha,score);
     }
     path.pop_back();
@@ -296,22 +374,46 @@ struct Search {
   }
 };
 }
-Move bestMove(const Position &p, int level, const std::shared_ptr<std::atomic_bool> &cancel, const std::vector<std::string> &history) {
+Move bestMove(const Position &p, int level, const std::shared_ptr<std::atomic_bool> &cancel, const std::vector<Position> &history) {
   auto moves = p.legal();
   if (moves.empty()) return {};
-  Search search{cancel, std::chrono::steady_clock::now() + std::chrono::milliseconds(level == 0 ? 180 : level == 1 ? 650 : 1600), history};
+  const auto started = std::chrono::steady_clock::now();
+  const auto budget = std::chrono::milliseconds(level == 0 ? 180 : level == 1 ? 650 : 1600);
+  // Only what came after the last capture or pawn move can be repeated. The position itself is the last of them.
+  const size_t reversible = std::min(history.size(),size_t(p.halfmove) + 1);
+  Search search{cancel, started + budget, {}};
+  for (size_t i = history.size() - reversible; i < history.size(); ++i) search.path.push_back(Search::hash(history[i]));
+  if (search.path.empty()) search.path.push_back(Search::hash(p));
+  // Moves that come out level are tried in a different order each time, so the same game is not played twice.
+  static thread_local std::mt19937 chance{std::random_device{}()};
+  std::shuffle(moves.begin(),moves.end(),chance);
   Move best = moves.front();
-  for (int depth = 1; depth <= (level == 0 ? 1 : level == 1 ? 3 : 5); ++depth) {
+  // With five pieces or fewer left the tree is small and the mates are long, so the search looks two plies further.
+  int pieces = 0;
+  for (const auto &piece : p.board) pieces += piece.kind != Empty;
+  const int horizon = (level == 0 ? 1 : level == 1 ? 3 : 5) + (level > 0 && pieces <= 5 ? 2 : 0);
+  for (int depth = 1; depth <= horizon; ++depth) {
+    // An iteration that cannot finish only spends the player's time: each takes several times the one before.
+    if (depth > 1 && std::chrono::steady_clock::now() - started > budget / 4) break;
     std::stable_sort(moves.begin(),moves.end(),[&](Move a, Move b) { return (a == best) > (b == best); });
     int alpha = -1000000;
     Move iteration = best;
+    std::vector<std::pair<int,Move>> scored;
     for (auto move : moves) {
-      int score = -search.run(p.after(move),depth - 1,-1000000,-alpha,1);
+      // The casual player wants every move's true score, to choose among the good ones; the others only the best.
+      int score = -search.run(p.after(move),depth - 1,-1000000,level == 0 ? 1000000 : -alpha,1);
       if (search.stopped) break;
+      scored.push_back({score,move});
       if (score > alpha) { alpha = score; iteration = move; }
     }
     if (search.stopped) break;
     best = iteration;
+    if (level == 0) {
+      // Casual play takes any move within a fifth of a pawn of the best it found.
+      std::vector<Move> good;
+      for (const auto &entry : scored) if (entry.first >= alpha - 20) good.push_back(entry.second);
+      best = good[std::uniform_int_distribution<size_t>(0,good.size() - 1)(chance)];
+    }
   }
   return best;
 }
