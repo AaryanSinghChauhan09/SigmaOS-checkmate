@@ -17,11 +17,19 @@ void SurfaceTexture::rebuild() {
     setFormat(QQuick3DTextureData::RGBA32F);
     data.resize(width*height*4*sizeof(float));
     for (int y=0;y<height;++y) for (int x=0;x<width;++x) {
-      float u=float(x)/width, v=float(y)/height;
-      float softbox=3.5f*std::exp(-std::pow((u-.22f)/.07f,8)-std::pow((v-.32f)/.16f,8));
-      float fill=1.5f*std::exp(-std::pow((u-.73f)/.13f,4)-std::pow((v-.4f)/.2f,4));
-      float sky=.18f+.22f*(1-v);
-      float pixel[]={sky+softbox+fill*.7f,sky+softbox*.94f+fill*.85f,sky+softbox*.84f+fill,1};
+      // Procedural probe rows run from nadir to zenith.
+      float u=float(x)/width, v=1.f-float(y)/height;
+      // The key light is feathered like a scrimmed softbox, as bright in all but soft at its edges:
+      // a hard-edged one mirrors in lacquer and brass as a cut-out shape.
+      float across=(u-.22f)/.0744f, down=std::abs(v-.32f)/.1687f;
+      // The studio stands on a table: seen from above, every silhouette mirrors what lies below the
+      // horizon, so the lights end there and the lower half is the dim warm board, not more sky.
+      float above=std::clamp((.5f-v)/.08f,0.f,1.f);
+      above=above*above*(3-2*above);
+      float softbox=3.8f*above*std::exp(-across*across-down*down*down);
+      float fill=2*above*std::exp(-std::pow((u-.73f)/.13f,4)-std::pow((v-.34f)/.16f,4));
+      float sky=(.18f+.22f*(1-v))*above;
+      float pixel[]={sky+.16f*(1-above)+softbox+fill*.7f,sky+.131f*(1-above)+softbox*.94f+fill*.85f,sky+.109f*(1-above)+softbox*.84f+fill,1};
       std::memcpy(data.data()+(y*width+x)*sizeof(pixel),pixel,sizeof(pixel));
     }
   } else {

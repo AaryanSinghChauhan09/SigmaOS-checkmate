@@ -9,7 +9,8 @@
 namespace Figures {
 using Field=std::function<float(Clay::P)>;
 // `cell` is how finely the solid is cut; `shade` is how far its recesses darken.
-struct Mould { Field field; float cell=.017f, shade=.4f; };
+// A `turned` solid is the same all round its axis; `company` stands against it and shades it.
+struct Mould { Field field; float cell=.017f, shade=.4f; bool turned=false; Field company=nullptr; };
 // Part 0 is a piece's body, 1 its metalwork, 2 its dark inlay and 3 the set's second colour.
 SculptFigure part(int design,int kind,int part);
 

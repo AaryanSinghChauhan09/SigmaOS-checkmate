@@ -165,26 +165,27 @@ std::vector<Mould> Orbital::moulds(int kind,int part) {
   }
   if(part==1) {
     const float scale=rank[kind];
-    std::vector<Mould> gold{{[=](P p) { return ring(p,.07f*scale,.322f*scale,.013f); },.007f,.3f}};
-    if(kind==1) gold.push_back({+[](P p) { return ring(p,.405f,.148f,.016f); },.008f,.3f});
+    // Plain rings and discs about the axis are turned, so their rims run true.
+    std::vector<Mould> gold{{[=](P p) { return ring(p,.07f*scale,.322f*scale,.013f); },.007f,.3f,true}};
+    if(kind==1) gold.push_back({+[](P p) { return ring(p,.405f,.148f,.016f); },.008f,.3f,true});
     if(kind==2) gold.push_back({edging,.007f,.3f});
     if(kind==3) gold.push_back({halo,.007f,.3f});
-    if(kind==4) gold.push_back({+[](P p) { return std::min(ring(p,.7f,.264f,.014f),ring(p,.41f,.186f,.012f)); },.007f,.3f});
+    if(kind==4) gold.push_back({+[](P p) { return std::min(ring(p,.7f,.264f,.014f),ring(p,.41f,.186f,.012f)); },.007f,.3f,true});
     if(kind==5) { gold.push_back({lining,.007f,.3f}); gold.push_back({piping,.006f,.3f}); }
     if(kind==6) { gold.push_back({braid,.007f,.3f}); gold.push_back({armillary(),.007f,.3f}); }
     return gold;
   }
   if(part==2) {
     // Dark glass: the band round the sentinel's dome, and the well of the bastion.
-    if(kind==1) return {{+[](P p) { return disc(p,.6f,.19f,.033f,.006f); },.01f,.2f}};
-    if(kind==4) return {{+[](P p) { return disc(p,.892f,.196f,.008f,.003f); },.006f,.2f}};
+    if(kind==1) return {{+[](P p) { return disc(p,.6f,.19f,.033f,.006f); },.01f,.2f,true}};
+    if(kind==4) return {{+[](P p) { return disc(p,.892f,.196f,.008f,.003f); },.006f,.2f,true}};
   }
   if(part==3) {
     // Lights: a lens, eye slits, the orbs the instruments hold, and what shows through ports and seams.
     if(kind==1) return {{+[](P p) { return egg(p,{0,.6f,-.186f},{.052f,.034f,.03f}); },.006f,0}};
     if(kind==2) return {{visor(),.005f,0}};
     if(kind==3) return {{+[](P p) { return ball(p,{0,1.1f,0},.066f); },.01f,0},{seam(),.005f,0}};
-    if(kind==4) return {{+[](P p) { return disc(p,.81f,.247f,.046f,.004f); },.01f,0}};
+    if(kind==4) return {{+[](P p) { return disc(p,.81f,.247f,.046f,.004f); },.01f,0,true}};
     if(kind==5) return {{+[](P p) { return ball(p,{-.07f,1.165f,0},.078f); },.012f,0}};
     const P gem=Figures::land(sovereign,{0,.86f,-.6f},{0,0,1});
     return {{+[](P p) { return ball(p,{0,1.35f,0},.055f); },.01f,0},{[=](P p) { return egg(p,gem,{.036f,.048f,.02f}); },.006f,0}};
