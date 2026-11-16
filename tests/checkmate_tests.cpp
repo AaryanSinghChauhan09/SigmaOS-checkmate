@@ -819,7 +819,7 @@ private slots:
         auto *pawn=window->findChild<QObject *>("figure-20");
         QVERIFY(pawn);
         QVERIFY(backend.move(12,28));
-        QTest::qWait(100);
+        QTest::qWait(160);
         QVERIFY(pawn->property("lift").toDouble()>0);
         QVERIFY(pawn->property("z").toDouble()>.5);
         QVERIFY(pawn->property("z").toDouble()<2.5);
@@ -827,15 +827,43 @@ private slots:
         // Quick 3D coordinates use float precision, including the final animation setter.
         QTRY_VERIFY_WITH_TIMEOUT(qFuzzyCompare(pawn->property("z").toFloat(),2.5f),1500);
         QTRY_COMPARE_WITH_TIMEOUT(pawn->property("lift").toDouble(),0.0,1500);
-        auto *hop=pawn->findChild<QObject *>("moveHop");
-        QVERIFY(hop);
+        auto *leap=pawn->findChild<QObject *>("leap");
+        auto *perk=pawn->findChild<QObject *>("perk");
+        QVERIFY(leap && perk);
         QVERIFY(backend.move(12,28));
-        QVERIFY(hop->property("running").toBool());
+        QVERIFY(leap->property("running").toBool());
         backend.setReducedMotion(true);
-        QVERIFY(!hop->property("running").toBool());
+        QVERIFY(!leap->property("running").toBool());
         QCOMPARE(pawn->property("lift").toDouble(),0.0);
         QCOMPARE(pawn->property("z").toDouble(),.5);
 
+        // Every set picks a piece up to its own height, carries it in an arc that leans into the journey, and settles it squarely.
+        for (int set=0;set<4;++set) {
+            backend.newGame(false,0);
+            backend.setPieceSet(set);
+            backend.setReducedMotion(false);
+            QTRY_VERIFY(board->property("clock").toDouble()>0);
+            backend.selectSquare(12);
+            QVERIFY(perk->property("running").toBool());
+            const double raised=std::vector<double>{.2,.14,.17,.17}[set];
+            QTRY_VERIFY(qAbs(pawn->property("raise").toDouble()-raised)<.001);
+            QVERIFY(backend.move(12,28));
+            QVERIFY(leap->property("running").toBool());
+            QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
+            QVERIFY(pawn->property("lift").toDouble()>0);
+            // A captured piece waits for its captor, then goes.
+            QVERIFY(backend.move(51,35));
+            auto *taken=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[35].id));
+            QVERIFY(taken);
+            QVERIFY(backend.move(28,35));
+            QCOMPARE(taken->property("presence").toDouble(),1.0);
+            QTRY_COMPARE_WITH_TIMEOUT(taken->property("presence").toDouble(),0.0,2500);
+            QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),2500);
+            QCOMPARE(pawn->property("lean").toDouble(),0.0);
+            QCOMPARE(pawn->property("stretch").toDouble(),1.0);
+            QCOMPARE(pawn->property("lift").toDouble(),0.0);
+            backend.setReducedMotion(true);
+        }
         // Moss & Myth is alive: it breathes, perks up in the hand, draws its neighbours' eyes, and leaps.
         backend.newGame(false,0);
         backend.setPieceSet(2);
@@ -843,16 +871,13 @@ private slots:
         QTRY_VERIFY(board->property("clock").toDouble()>0);
         QTRY_VERIFY(qAbs(pawn->property("tall").toDouble()-1)>.002);
         auto *neighbour=window->findChild<QObject *>("figure-"+QString::number(backend.position().board[11].id));
-        auto *leap=pawn->findChild<QObject *>("leap");
-        auto *perk=pawn->findChild<QObject *>("perk");
-        QVERIFY(neighbour && leap && perk);
+        QVERIFY(neighbour);
         backend.selectSquare(12);
         QVERIFY(perk->property("running").toBool());
         QTRY_VERIFY(qAbs(pawn->property("raise").toDouble()-.17)<.001);
         QTRY_VERIFY(qAbs(neighbour->property("look").toDouble())>5);
         QVERIFY(backend.move(12,28));
         QVERIFY(leap->property("running").toBool());
-        QVERIFY(!hop->property("running").toBool());
         QTRY_VERIFY(qAbs(pawn->property("lean").toDouble())>2);
         QVERIFY(pawn->property("lift").toDouble()>0);
         QTRY_VERIFY_WITH_TIMEOUT(!leap->property("running").toBool(),2000);
