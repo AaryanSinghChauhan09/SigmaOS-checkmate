@@ -855,7 +855,7 @@ private slots:
             QTest::qWait(100);
         }
         {
-            // The piece set is picked from a dropdown in the header.
+            // The piece set is picked from a dropdown in the sidebar.
             auto *picker=window->findChild<QQuickItem *>("setPicker");
             auto *menu=window->findChild<QObject *>("setMenu");
             QVERIFY(picker && menu);
@@ -903,21 +903,45 @@ private slots:
             QTest::keyClick(window,Qt::Key_B);
             QVERIFY(backend.sidebar());
             QTRY_COMPARE(board->width(),narrow);
-            // Tab clears the header and sidebar away for a bare board, and brings them back.
-            auto *header=window->findChild<QQuickItem *>("header");
-            QVERIFY(header && header->isVisible());
-            const qreal low=board->height();
+            // With the sidebar put away, a button on the board brings it back.
+            auto *show=window->findChild<QQuickItem *>("showSidebar");
+            QVERIFY(show && !show->isVisible());
+            QTest::keyClick(window,Qt::Key_B);
+            QTRY_VERIFY(show->isVisible());
+            QTest::mouseClick(window,Qt::LeftButton,{},show->mapToScene(QPointF(show->width()/2,show->height()/2)).toPoint());
+            QVERIFY(backend.sidebar());
+            QTRY_VERIFY(sidebar->isVisible() && !show->isVisible());
+            QTRY_COMPARE(board->width(),narrow);
+            // Every control is in the sidebar, so the board has the window's full height.
+            QCOMPARE(board->height(),qreal(window->height()));
+            for (const char *name : {"newGameButton","settingsButton","undoButton","setPicker","sidebarButton"}) {
+                auto *control=window->findChild<QQuickItem *>(name);
+                QVERIFY2(control && control->isVisible(),name);
+                const QPointF corner=control->mapToItem(sidebar,QPointF(0,0));
+                QVERIFY2(corner.x()>=0 && corner.y()>=0 && corner.x()+control->width()<=sidebar->width() && corner.y()+control->height()<=sidebar->height(),name);
+            }
+            {
+                // In a narrow window the sidebar slims down, and its name still clears the buttons beside it.
+                const QSize wide=window->size();
+                window->resize(1000,wide.height());
+                auto *toggle=window->findChild<QQuickItem *>("sidebarButton");
+                auto *title=window->findChild<QQuickItem *>("title");
+                QVERIFY(toggle && title);
+                QTRY_COMPARE(sidebar->width(),264.0);
+                QTRY_VERIFY(title->mapToItem(sidebar,QPointF(title->property("contentWidth").toReal(),0)).x()<=toggle->mapToItem(sidebar,QPointF(0,0)).x());
+                QVERIFY(!title->property("truncated").toBool());
+                window->resize(wide);
+                QTRY_COMPARE(board->width(),narrow);
+            }
+            // Tab clears the sidebar away for a bare board, and brings it back.
             QTest::keyClick(window,Qt::Key_Tab);
-            QTRY_VERIFY(!header->isVisible());
-            QVERIFY(!sidebar->isVisible());
+            QTRY_VERIFY(!sidebar->isVisible());
+            QVERIFY(!show->isVisible());
             QVERIFY(backend.sidebar());
             QTRY_COMPARE(board->width(),qreal(window->width()));
-            QTRY_COMPARE(board->height(),qreal(window->height()));
             QTest::keyClick(window,Qt::Key_Tab);
-            QTRY_VERIFY(header->isVisible());
-            QVERIFY(sidebar->isVisible());
+            QTRY_VERIFY(sidebar->isVisible());
             QTRY_COMPARE(board->width(),narrow);
-            QTRY_COMPARE(board->height(),low);
         }
         board->setProperty("cursorSquare",28);
         QTest::keyClick(window,Qt::Key_F);
