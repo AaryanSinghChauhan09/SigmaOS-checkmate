@@ -26,10 +26,26 @@ Item {
   focus: true
   function seatAngle() { return backend.computer ? (backend.humanWhite ? 0 : 180) : (backend.autoRotate && !backend.whiteTurn ? 180 : 0) }
   function homeElevation() { return design === 2 ? -46 : -47 }
-  function homeDistance() { return design === 2 ? 12.9 : 17 }
+  function homeDistance() { return Math.max(design === 2 ? 12.9 : 17, fitDistance) }
   // The cast sets are seen through a longer lens from further back, so the near rank is not looked down on from overhead.
   property real lens: design === 2 ? 43 : 32
-  property real farthest: design === 2 ? 20 : 26
+  property real farthest: Math.max(design === 2 ? 20 : 26, fitDistance * 1.25)
+  // The lens is fixed vertically, so a narrow view would crop the board's sides; the camera backs off until the frame and back-rank pieces fit.
+  // The board is square, so the fit ignores the seat and the camera holds still through a flip.
+  property real fitDistance: {
+    let aspect = width > 0 && height > 0 ? width / height : 1.6
+    let tanV = Math.tan(lens * Math.PI / 360) * .94, tanH = tanV * aspect
+    let e = elevation * Math.PI / 180
+    let points = []
+    for (let x of [-4.55, 4.55]) for (let z of [-4.55, 4.55]) points.push([x, -.5, z], [x, .1, z])
+    for (let x of [-4, 4]) for (let z of [-3.5, 3.5]) points.push([x, 1.5, z])
+    let needed = 0
+    for (let [x, y, z] of points) {
+      let y2 = y * Math.cos(e) + z * Math.sin(e), z2 = z * Math.cos(e) - y * Math.sin(e)
+      needed = Math.max(needed, z2 + Math.abs(x) / tanH, z2 + Math.abs(y2) / tanV)
+    }
+    return needed
+  }
   function resetCamera() {
     manualAzimuth = 0
     elevation = Qt.binding(function() { return board.homeElevation() })

@@ -799,6 +799,30 @@ private slots:
         QTRY_VERIFY(!dialog->property("visible").toBool());
         auto *board=window->findChild<QQuickItem *>("board");
         QVERIFY(board);
+        {
+            // A narrow window pulls the camera back until the whole frame is in view.
+            const QSize original=window->size();
+            auto *view=window->findChild<QObject *>("scene");
+            QVERIFY(view);
+            for (const QSize size : {QSize(1280,850),QSize(760,1240)}) {
+                window->resize(size);
+                QTest::qWait(150);
+                for (int set=0;set<4;++set) {
+                    backend.setPieceSet(set);
+                    QTest::qWait(60);
+                    for (float x : {-4.55f,4.55f}) for (float z : {-4.55f,4.55f}) {
+                        QVector3D point;
+                        QVERIFY(QMetaObject::invokeMethod(view,"mapFrom3DScene",Q_RETURN_ARG(QVector3D,point),Q_ARG(QVector3D,QVector3D(x,0,z))));
+                        QVERIFY2(point.x()>=0 && point.x()<=board->width() && point.y()>=0 && point.y()<=board->height(),
+                                 qPrintable(QString("set %1 at %2x%3: corner %4,%5 lands at %6,%7").arg(set).arg(size.width()).arg(size.height())
+                                            .arg(x).arg(z).arg(point.x()).arg(point.y())));
+                    }
+                }
+            }
+            backend.setPieceSet(0);
+            window->resize(original);
+            QTest::qWait(100);
+        }
         board->setProperty("cursorSquare",28);
         QTest::keyClick(window,Qt::Key_F);
         QTest::keyClick(window,Qt::Key_Right);
