@@ -1,4 +1,6 @@
-# Checkmate
+# SigmaOS checkmate
+
+> Forked from omacom/checkmate (MIT). See `SIGMAOS_FORK.md`.
 
 ![Checkmate with the Moss & Myth set, four moves into a game](screenshots/checkmate.webp)
 
