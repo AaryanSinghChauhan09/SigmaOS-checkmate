@@ -1,10 +1,10 @@
 # SigmaOS checkmate
 
-> Forked from omacom/checkmate (MIT). See `SIGMAOS_FORK.md`.
+> Forked from SigmaOS/checkmate (MIT). See `SIGMAOS_FORK.md`.
 
 ![Checkmate with the Moss & Myth set, four moves into a game](screenshots/checkmate.webp)
 
-3D chess for Omarchy. Play a friend on the same computer or the built-in opponent, on four original sculpted sets. Built with C++ and Qt Quick 3D, following Omarchy's theme and language.
+3D chess for SigmaOS. Play a friend on the same computer or the built-in opponent, on four original sculpted sets. Built with C++ and Qt Quick 3D, following SigmaOS's theme and language.
 
 ![The four sets: Orbital Orders, Midnight Atelier, Moss & Myth and Candy Kingdom](screenshots/sets.webp)
 
@@ -41,7 +41,7 @@ checkmate legal [FEN]      # legal moves, from the start or a position
 
 ## Build
 
-Needs CMake, a C++17 compiler and Qt 6 with Quick 3D. On Omarchy, `bin/build` installs whatever is missing.
+Needs CMake, a C++17 compiler and Qt 6 with Quick 3D. On SigmaOS, `bin/build` installs whatever is missing.
 
 ```bash
 bin/build
